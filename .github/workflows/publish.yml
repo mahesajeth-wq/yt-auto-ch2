@@ -1,0 +1,84 @@
+name: Publish Video to YouTube
+
+on:
+  workflow_dispatch:
+    inputs:
+      format:
+        description: 'Video format to publish'
+        required: true
+        default: 'short'
+        type: choice
+        options: [short, long]
+      bypass_judge:
+        description: 'Bypass Judge AI visual check'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Find and download latest generate artifact
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          FORMAT="${{ inputs.format }}"
+          WORKFLOW="generate_${FORMAT}.yml"
+          echo "Looking for latest successful $WORKFLOW run..."
+          RUN_ID=$(gh run list \
+            --repo "$GITHUB_REPOSITORY" \
+            --workflow "$WORKFLOW" \
+            --status success \
+            --limit 1 \
+            --json databaseId \
+            --jq '.[0].databaseId')
+            
+          if [ -z "$RUN_ID" ]; then
+            echo "Error: No successful runs found for $WORKFLOW."
+            exit 1
+          fi
+          
+          echo "Downloading artifact from run $RUN_ID..."
+          gh run download "$RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern "${FORMAT}-video-*" \
+            --dir output/
+            
+          # Flatten nested dir if download-artifact creates subdirectory
+          mv output/*/* output/ 2>/dev/null || true
+          
+          echo "Files in output directory:"
+          ls -la output/
+
+      - name: Upload to YouTube
+        env:
+          YT_CLIENT_ID:     ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+          GEMINI_API_KEY:    ${{ secrets.GEMINI_API_KEY }}
+          COVERR_API_KEY:    ${{ secrets.COVERR_API_KEY }}
+          NASA_API_KEY:      ${{ secrets.NASA_API_KEY }}
+          GEMINI_API_KEYS:   ${{ secrets.GEMINI_API_KEYS }}
+          GEMINI_JUDGE_API_KEY: ${{ secrets.GEMINI_JUDGE_API_KEY }}
+        run: |
+          BYPASS_FLAG=""
+          if [ "${{ inputs.bypass_judge }}" = "true" ]; then
+            BYPASS_FLAG="--bypass-judge"
+          fi
+          python run_publish.py $BYPASS_FLAG
+
+      - name: Report result
+        run: echo "✅ Published to YouTube. Check YouTube Studio to confirm scheduling."

@@ -1,0 +1,176 @@
+import os
+import json
+import time
+import requests
+import mimetypes
+from pipeline.config import GEMINI_JUDGE_API_KEY, GEMINI_FLASH, GEMINI_API_BASE
+
+def upload_file_to_gemini(filepath: str, api_key: str) -> dict:
+    mime_type, _ = mimetypes.guess_type(filepath)
+    if not mime_type:
+        mime_type = "video/mp4"
+        
+    file_size = os.path.getsize(filepath)
+    filename = os.path.basename(filepath)
+    
+    print(f"Uploading file '{filename}' ({file_size / (1024*1024):.2f} MB) to Gemini Files API via simple upload...")
+    
+    url = f"https://generativelanguage.googleapis.com/upload/v1beta/files?uploadType=media&key={api_key}"
+    headers = {
+        "Content-Type": mime_type,
+        "Content-Length": str(file_size),
+        "X-Goog-Upload-Header-Content-Length": str(file_size),
+        "X-Goog-Upload-Header-Content-Type": mime_type,
+    }
+    
+    with open(filepath, "rb") as f:
+        file_bytes = f.read()
+        
+    response = requests.post(url, headers=headers, data=file_bytes, timeout=300)
+    response.raise_for_status()
+    return response.json()
+
+
+def wait_for_file_active(file_name: str, api_key: str, max_timeout_seconds: int = 180) -> bool:
+    url = f"https://generativelanguage.googleapis.com/v1beta/{file_name}?key={api_key}"
+    print(f"Waiting for Gemini Files API to process video '{file_name}'...")
+    
+    start_time = time.time()
+    while time.time() - start_time < max_timeout_seconds:
+        response = requests.get(url, timeout=30)
+        response.raise_for_status()
+        data = response.json()
+        state = data.get("state")
+        
+        if state == "ACTIVE":
+            print("Video file is now ACTIVE and ready for query.")
+            return True
+        elif state == "FAILED":
+            raise RuntimeError(f"File processing failed on Gemini Files API: {data}")
+        else:
+            print(f"Current file state is '{state}'. Retrying in 5 seconds...")
+            time.sleep(5)
+            
+    raise TimeoutError("Timeout exceeded waiting for Gemini Files API to activate the file")
+
+def delete_file_from_gemini(file_name: str, api_key: str):
+    url = f"https://generativelanguage.googleapis.com/v1beta/{file_name}?key={api_key}"
+    try:
+        print(f"Cleaning up temporary file {file_name} from Gemini storage...")
+        response = requests.delete(url, timeout=30)
+        response.raise_for_status()
+        print("File deleted successfully.")
+    except Exception as e:
+        print(f"Warning: Failed to delete temporary file {file_name}: {e}")
+
+class JudgeClient:
+    def __init__(self):
+        self.api_key = GEMINI_JUDGE_API_KEY
+        self.base_url = GEMINI_API_BASE
+        
+    def review_video(self, video_path: str, metadata: dict) -> dict:
+        file_name = None
+        try:
+            # 1. Upload video
+            upload_response = upload_file_to_gemini(video_path, self.api_key)
+            file_info = upload_response.get("file", {})
+            file_name = file_info.get("name")
+            file_uri = file_info.get("uri")
+            mime_type = file_info.get("mimeType")
+            
+            if not file_name or not file_uri:
+                raise RuntimeError(f"Unexpected file upload response: {upload_response}")
+                
+            # 2. Wait for active status
+            wait_for_file_active(file_name, self.api_key)
+            
+            # 3. Formulate Prompt
+            rubric = f"""You are "Judge AI" (an expert viral media director and quality assurance LLM). Your task is to evaluate the generated educational video and ensure it meets our strict viral criteria.
+
+Video Metadata:
+{json.dumps(metadata, indent=2)}
+
+Please watch the video and evaluate it against these 5 rubrics:
+1. **Cohesiveness & Alignment (CRITICAL)**: Does the voiceover audio match the visual B-roll clips and the text captions shown on screen?
+- Check for any mismatch (e.g. if the audio discusses "Quantum Computing" but the text caption or B-roll displays terms like "CRISPR" or "Gene Editing").
+   - Look out for generic or symbolic placeholders (e.g. a generic man with glasses looking at a screen, generic office workers) that do not directly represent specific scientific/technical/space concepts described in the audio (like 'asteroid wobble', 'planetary defense', 'Bose-Einstein condensate', etc.).
+   - IMPORTANT EXCEPTION (Scientific Abstractions): Stock video libraries DO NOT have specialized animations for exact scientific terms (e.g., specific protein names, TMAO molecules, specific rare fish like Mariana snailfish). You MUST ACCEPT generic scientific abstractions (e.g., "symbolic squishy balls", glowing orbs, fluid dynamics, generic laboratories, generic underwater scenes/bubbles, generic deep sea fish) as VALID matches for specific microscopic, chemical, or biological narration. Do NOT penalize or fail the video for these abstractions.
+   - IMPORTANT: Skip false alarms for abstract concepts. When the narration discusses abstract ideas like "profound implications", "mysteries of life", or "time passing", broader thematic visuals (like sunsets, horizons, oceans, or glowing particles) are valid artistic choices and MUST NOT be flagged as generic placeholders.
+   - However, you MUST STILL REJECT completely contradictory or jarring mismatches (e.g., showing a cityscape or smokestack when discussing deep sea biology, or showing a desert when discussing ocean water).
+   - Check if the SAME visual clip is repeated or looped twice in different parts of the video. Repeating the same B-roll clip is a critical quality failure.
+   - If there is any mismatched topic (like a cityscape for the ocean), symbolic placeholder (except for abstract concepts and scientific abstractions as noted above), or repeated clip, you MUST set status="REJECTED" and score below 80, and list the exact segment numbers that failed.
+2. **Hook Appeal**: Is the hook in the first 3-5 seconds of the video engaging and curiosity-inducing?
+3. **Subtitles/Captions**: Are subtitles present, readable, and matching the narration word-for-word? Note: The video uses modern rapid-fire single-word subtitle style (typical for viral Shorts). This is the EXPECTED and CORRECT behavior. Do not fail the video for displaying one word at a time, as long as it matches what is being spoken.
+4. **Music & Audio Quality**: Is the background music clean, and is it mixed correctly without overpowering the voiceover?
+5. **Retention & Loopability**: Does the video contain a retention element (like a rewatch callout in segment 4)? Does it loop back seamlessly from the last segment to the first segment's narration? Note: Segment 5 echoing Segment 1's THEME (not its exact wording) is the desired outcome — flag verbatim repetition of Segment 1's sentence as a script-quality issue.
+
+You MUST return your review ONLY as a raw JSON object with no markdown syntax. The JSON structure must be exactly like this:
+{{
+  "score": 85, // Overall quality score (0-100)
+  "status": "PASSED", // "PASSED" if score >= 80 and no critical mismatches/repeated clips, otherwise "REJECTED"
+  "reason": "Explain the decision in detail",
+  "cohesiveness_score": 90, // 0-100 score for audio-visual-caption matching
+  "hook_score": 80, // 0-100 score for hook appeal
+  "retention_score": 85, // 0-100 score for looping and retention triggers
+  "failed_segments": [3, 4], // 0-based indices of segments that had bad B-roll, generic placeholders, or mismatches, or empty [] if none
+  "issues": ["List of specific issues found, or empty if none"]
+}}
+"""
+            
+            # 4. Generate Review Content (Primary: Gemini 2.5 Flash, Fallback: Gemini 2.5 Flash)
+            model_to_use = GEMINI_FLASH
+            url = f"{self.base_url}/models/{model_to_use}:generateContent?key={self.api_key}"
+            headers = {"Content-Type": "application/json"}
+            payload = {
+                "contents": [
+                    {
+                        "role": "user",
+                        "parts": [
+                            {"fileData": {"mimeType": mime_type, "fileUri": file_uri}},
+                            {"text": rubric}
+                        ]
+                    }
+                ],
+                "generationConfig": {
+                    "temperature": 0.2,
+                    "responseMimeType": "application/json"
+                }
+            }
+            
+            print(f"Sending video to model '{model_to_use}' for analysis...")
+            try:
+                response = requests.post(url, headers=headers, json=payload, timeout=180)
+                response.raise_for_status()
+                response_data = response.json()
+            except Exception as model_err:
+                print(f"Primary model {model_to_use} failed: {model_err}. Falling back to {GEMINI_FLASH}...")
+                model_to_use = GEMINI_FLASH
+                url_fallback = f"{self.base_url}/models/{model_to_use}:generateContent?key={self.api_key}"
+                # Remove responseMimeType from config for flash if not supported in the endpoint
+                payload["generationConfig"] = {"temperature": 0.2}
+                response = requests.post(url_fallback, headers=headers, json=payload, timeout=180)
+                response.raise_for_status()
+                response_data = response.json()
+                
+            try:
+                text_response = response_data["candidates"][0]["content"]["parts"][0]["text"]
+            except (KeyError, IndexError) as parse_err:
+                raise RuntimeError(f"Unexpected response format from Gemini: {response_data}") from parse_err
+                
+            # Clean response fences
+            text_response = text_response.strip()
+            if text_response.startswith("```json"):
+                text_response = text_response[7:]
+            elif text_response.startswith("```"):
+                text_response = text_response[3:]
+            if text_response.endswith("```"):
+                text_response = text_response[:-3]
+                
+            report = json.loads(text_response.strip())
+            print(f"Judge AI Review complete. Status: {report.get('status')} (Score: {report.get('score')}/100)")
+            return report
+            
+        finally:
+            # Clean up the file in Gemini storage
+            if file_name:
+                delete_file_from_gemini(file_name, self.api_key)

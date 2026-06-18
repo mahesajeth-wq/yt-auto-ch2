@@ -1,0 +1,17 @@
+# Output folder for generated videos
+output/
+
+# Local credentials
+.env
+local_env.sh
+*.env
+
+# Python caches
+__pycache__/
+*.py[cod]
+*$py.class
+
+# OS/IDE metadata
+.DS_Store
+.vscode/
+.idea/

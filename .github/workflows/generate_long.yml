@@ -1,0 +1,89 @@
+name: Generate Long Video
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 15 * * 0'    # Sunday 15:00 UTC — Long-form (10 AM EST)
+
+permissions:
+  contents: write             # needed to commit published_topics.json + voice_state.json
+
+jobs:
+  generate-and-publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Install Bebas Neue Font
+        run: |
+          mkdir -p ~/.local/share/fonts
+          wget -O ~/.local/share/fonts/BebasNeue-Regular.ttf https://raw.githubusercontent.com/google/fonts/main/ofl/bebasneue/BebasNeue-Regular.ttf
+          fc-cache -fv
+
+
+      - name: Cache faster-whisper models
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface/hub
+          key: ${{ runner.os }}-whisper-base-v1
+          restore-keys: |
+            ${{ runner.os }}-whisper-
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Generate Long
+        env:
+          GEMINI_API_KEY:    ${{ secrets.GEMINI_API_KEY }}
+          PEXELS_API_KEY:    ${{ secrets.PEXELS_API_KEY }}
+          PIXABAY_API_KEY:   ${{ secrets.PIXABAY_API_KEY }}
+          YT_CLIENT_ID:      ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET:  ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REFRESH_TOKEN:  ${{ secrets.YT_REFRESH_TOKEN }}
+          COVERR_API_KEY:    ${{ secrets.COVERR_API_KEY }}
+          NASA_API_KEY:      ${{ secrets.NASA_API_KEY }}
+          GEMINI_API_KEYS:   ${{ secrets.GEMINI_API_KEYS }}
+          GEMINI_JUDGE_API_KEY: ${{ secrets.GEMINI_JUDGE_API_KEY }}
+          FREESOUND_API_KEY: ${{ secrets.FREESOUND_API_KEY }}
+        run: python run_generate.py --format long
+
+      - name: Publish to YouTube
+        env:
+          YT_CLIENT_ID:      ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET:  ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REFRESH_TOKEN:  ${{ secrets.YT_REFRESH_TOKEN }}
+          GEMINI_API_KEY:    ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_KEYS:   ${{ secrets.GEMINI_API_KEYS }}
+          GEMINI_JUDGE_API_KEY: ${{ secrets.GEMINI_JUDGE_API_KEY }}
+        run: python run_publish.py
+
+      - name: Upload video artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: long-video-${{ github.run_id }}
+          path: |
+            output/final_long.mp4
+            output/thumbnail.jpg
+            output/metadata.json
+          retention-days: 7
+
+      - name: Commit state files
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add published_topics.json voice_state.json gemini_state.json thumbnail_state.json cache_music/ || true
+          git diff --staged --quiet || git commit -m "chore: update pipeline state [skip ci]"
+          git push || true
