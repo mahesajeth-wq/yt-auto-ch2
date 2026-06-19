@@ -3,7 +3,29 @@ import json
 import time
 import requests
 import mimetypes
-from pipeline.config import GEMINI_JUDGE_API_KEY, GEMINI_FLASH, GEMINI_API_BASE
+from pipeline.config import GEMINI_FLASH, GEMINI_API_BASE
+from pipeline.gemini import _clean_json_output, _shared_pool
+
+
+RETRIABLE_STATUS_CODES = {400, 403, 429, 500, 502, 503, 504}
+
+
+def _http_status(exc: Exception) -> int:
+    response = getattr(exc, "response", None)
+    return int(getattr(response, "status_code", 0) or 0)
+
+
+def _get_judge_key() -> str | None:
+    key = _shared_pool.get_available_key()
+    if key:
+        return key
+    now = time.time()
+    earliest_idx = min(range(len(_shared_pool)), key=lambda idx: _shared_pool._cooldowns[idx])
+    wait_time = max(1.0, _shared_pool._cooldowns[earliest_idx] - now)
+    wait_time = min(15.0, wait_time)
+    print(f"[JudgeAI] All Gemini keys on cooldown. Waiting {wait_time:.1f}s for key slot {earliest_idx + 1}...")
+    time.sleep(wait_time)
+    return None
 
 def upload_file_to_gemini(filepath: str, api_key: str) -> dict:
     mime_type, _ = mimetypes.guess_type(filepath)
@@ -65,14 +87,36 @@ def delete_file_from_gemini(file_name: str, api_key: str):
 
 class JudgeClient:
     def __init__(self):
-        self.api_key = GEMINI_JUDGE_API_KEY
         self.base_url = GEMINI_API_BASE
         
     def review_video(self, video_path: str, metadata: dict) -> dict:
+        last_error: Exception | None = None
+        max_attempts = max(1, len(_shared_pool) * 2)
+        for attempt in range(max_attempts):
+            api_key = _get_judge_key()
+            if not api_key:
+                continue
+            slot = _shared_pool._keys.index(api_key) + 1
+            try:
+                report = self._review_video_with_key(video_path, metadata, api_key)
+                _shared_pool.mark_success(api_key)
+                return report
+            except Exception as exc:
+                last_error = exc
+                status = _http_status(exc)
+                print(f"[JudgeAI] Key slot {slot}/{len(_shared_pool)} failed during review (status {status or 'unknown'}): {exc}")
+                if status in RETRIABLE_STATUS_CODES or status == 0:
+                    _shared_pool.mark_failed(api_key, status or 0)
+                    _shared_pool._idx += 1
+                    continue
+                raise
+        raise RuntimeError("Judge AI: all Gemini keys exhausted during video review.") from last_error
+
+    def _review_video_with_key(self, video_path: str, metadata: dict, api_key: str) -> dict:
         file_name = None
         try:
             # 1. Upload video
-            upload_response = upload_file_to_gemini(video_path, self.api_key)
+            upload_response = upload_file_to_gemini(video_path, api_key)
             file_info = upload_response.get("file", {})
             file_name = file_info.get("name")
             file_uri = file_info.get("uri")
@@ -82,7 +126,7 @@ class JudgeClient:
                 raise RuntimeError(f"Unexpected file upload response: {upload_response}")
                 
             # 2. Wait for active status
-            wait_for_file_active(file_name, self.api_key)
+            wait_for_file_active(file_name, api_key)
             
             # 3. Formulate Prompt
             rubric = f"""You are "Judge AI" (an expert viral media director and quality assurance LLM). Your task is to evaluate the generated educational video and ensure it meets our strict viral criteria.
@@ -119,7 +163,7 @@ You MUST return your review ONLY as a raw JSON object with no markdown syntax. T
             
             # 4. Generate Review Content (Primary: Gemini 2.5 Flash, Fallback: Gemini 2.5 Flash)
             model_to_use = GEMINI_FLASH
-            url = f"{self.base_url}/models/{model_to_use}:generateContent?key={self.api_key}"
+            url = f"{self.base_url}/models/{model_to_use}:generateContent?key={api_key}"
             headers = {"Content-Type": "application/json"}
             payload = {
                 "contents": [
@@ -145,7 +189,7 @@ You MUST return your review ONLY as a raw JSON object with no markdown syntax. T
             except Exception as model_err:
                 print(f"Primary model {model_to_use} failed: {model_err}. Falling back to {GEMINI_FLASH}...")
                 model_to_use = GEMINI_FLASH
-                url_fallback = f"{self.base_url}/models/{model_to_use}:generateContent?key={self.api_key}"
+                url_fallback = f"{self.base_url}/models/{model_to_use}:generateContent?key={api_key}"
                 # Remove responseMimeType from config for flash if not supported in the endpoint
                 payload["generationConfig"] = {"temperature": 0.2}
                 response = requests.post(url_fallback, headers=headers, json=payload, timeout=180)
@@ -157,20 +201,11 @@ You MUST return your review ONLY as a raw JSON object with no markdown syntax. T
             except (KeyError, IndexError) as parse_err:
                 raise RuntimeError(f"Unexpected response format from Gemini: {response_data}") from parse_err
                 
-            # Clean response fences
-            text_response = text_response.strip()
-            if text_response.startswith("```json"):
-                text_response = text_response[7:]
-            elif text_response.startswith("```"):
-                text_response = text_response[3:]
-            if text_response.endswith("```"):
-                text_response = text_response[:-3]
-                
-            report = json.loads(text_response.strip())
+            report = json.loads(_clean_json_output(text_response))
             print(f"Judge AI Review complete. Status: {report.get('status')} (Score: {report.get('score')}/100)")
             return report
             
         finally:
             # Clean up the file in Gemini storage
             if file_name:
-                delete_file_from_gemini(file_name, self.api_key)
+                delete_file_from_gemini(file_name, api_key)
