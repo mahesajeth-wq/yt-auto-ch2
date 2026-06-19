@@ -4,7 +4,6 @@ import os
 import sys
 import google.auth.exceptions
 import pipeline.phase9_upload as phase9
-from pipeline.judge import JudgeClient
 
 def main():
     parser = argparse.ArgumentParser(description="yt-auto Video Publisher")
@@ -58,6 +57,8 @@ def main():
                 print(f"Warning: Failed to load cached judge report: {e}. Running full review...")
                 
         if not report:
+            from pipeline.judge import JudgeClient
+
             judge = JudgeClient()
             try:
                 report = judge.review_video(video_path, metadata)
