@@ -14,6 +14,10 @@ jobs:
   generate-and-publish:
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    env:
+      PYTHONUNBUFFERED: "1"
+      BROLL_SEGMENT_BUDGET_SECONDS: "180"
+      JUDGE_MAX_ATTEMPTS: "6"
 
     steps:
       - uses: actions/checkout@v4
@@ -58,6 +62,7 @@ jobs:
           YT_REFRESH_TOKEN:  ${{ secrets.YT_REFRESH_TOKEN }}
           COVERR_API_KEY:    ${{ secrets.COVERR_API_KEY }}
           NASA_API_KEY:      ${{ secrets.NASA_API_KEY }}
+          KLIPY_API_KEY:     ${{ secrets.KLIPY_API_KEY }}
           GEMINI_API_KEYS:   ${{ secrets.GEMINI_API_KEYS }}
           GEMINI_JUDGE_API_KEY: ${{ secrets.GEMINI_JUDGE_API_KEY }}
           FREESOUND_API_KEY: ${{ secrets.FREESOUND_API_KEY }}
@@ -82,7 +87,7 @@ jobs:
           GEMINI_API_KEY:    ${{ secrets.GEMINI_API_KEY }}
           GEMINI_API_KEYS:   ${{ secrets.GEMINI_API_KEYS }}
           GEMINI_JUDGE_API_KEY: ${{ secrets.GEMINI_JUDGE_API_KEY }}
-        run: python run_publish.py
+        run: timeout 15m python run_publish.py
 
       - name: Upload video artifact
         if: always()

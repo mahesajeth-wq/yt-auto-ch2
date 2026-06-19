@@ -121,7 +121,7 @@ def main():
             ]
         }
         
-        max_attempts = 15
+        max_attempts = int(os.environ.get("JUDGE_MAX_ATTEMPTS", "6"))
         attempt = 1
         
         while attempt <= max_attempts:
@@ -144,10 +144,10 @@ def main():
                 
             print(f"[Judge AI] Video REJECTED. Failed segments: {failed_segs}")
             if attempt == max_attempts:
-                print("[Judge AI] Reached max review attempts. Proceeding with current version.")
+                print("[Judge AI] Reached max review attempts. Refusing to publish rejected video.")
                 with open("output/judge_report.json", "w") as rf:
                     json.dump(review_result, rf, indent=2)
-                break
+                sys.exit(1)
                 
             print(f"[Judge AI] Re-fetching B-roll for failed segments {failed_segs}...")
             for idx in failed_segs:

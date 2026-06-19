@@ -3,6 +3,7 @@ import random
 import requests
 import urllib.parse
 import subprocess
+import time
 from pipeline.config import PEXELS_API_KEY, PIXABAY_API_KEY, COVERR_API_KEY, NASA_API_KEY
 
 
@@ -621,6 +622,15 @@ def fetch_broll(query: str, format_type: str, segment_index: int, duration: floa
     out_path    = f"output/broll_{segment_index}.mp4"
     img_path    = f"output/broll_{segment_index}.jpg"
     w, h        = (1080, 1920) if format_type == "short" else (1920, 1080)
+    budget_default = "180" if format_type == "short" else "240"
+    budget_seconds = int(os.environ.get("BROLL_SEGMENT_BUDGET_SECONDS", budget_default))
+    deadline = time.monotonic() + budget_seconds
+
+    def budget_exceeded() -> bool:
+        if time.monotonic() <= deadline:
+            return False
+        print(f"[B-roll] Segment {segment_index}: time budget exceeded ({budget_seconds}s). Using fast fallback.")
+        return True
 
     os.makedirs("output", exist_ok=True)
 
@@ -644,6 +654,8 @@ def fetch_broll(query: str, format_type: str, segment_index: int, duration: floa
     is_science = any(k in query.lower() for k in ["space", "nasa", "star", "planet", "galaxy", "orbit", "telescope", "asteroid", "science", "physics", "chemical", "atom", "molecule", "earth", "moon", "sun", "nebula", "black hole"])
     if is_science:
         for q in queries_to_try[:2]:
+            if budget_exceeded():
+                break
             print(f"[B-roll] Segment {segment_index}: checking NASA video for '{q}'…")
             nasa_cand = _nasa_video_candidate(q)
             if nasa_cand:
@@ -652,6 +664,8 @@ def fetch_broll(query: str, format_type: str, segment_index: int, duration: floa
 
     # 2. Fetch Wikimedia video candidate
     for q in queries_to_try[:2]:
+        if budget_exceeded():
+            break
         print(f"[B-roll] Segment {segment_index}: checking Wikimedia video for '{q}'…")
         wiki_cand = _wikimedia_video_candidate(q)
         if wiki_cand:
@@ -661,6 +675,8 @@ def fetch_broll(query: str, format_type: str, segment_index: int, duration: floa
     # 3. Fetch Coverr candidates (up to 2)
     if COVERR_API_KEY:
         for q in queries_to_try[:2]:
+            if budget_exceeded():
+                break
             c_cands = _coverr_candidates(q, orientation, n=2)
             if c_cands:
                 candidates.extend(c_cands)
@@ -669,6 +685,8 @@ def fetch_broll(query: str, format_type: str, segment_index: int, duration: floa
     # 4. Fetch Pexels candidates (up to 2)
     if PEXELS_API_KEY:
         for q in queries_to_try[:2]:
+            if budget_exceeded():
+                break
             p_cands = _pexels_candidates(q, orientation, n=2)
             if p_cands:
                 candidates.extend(p_cands)
@@ -677,6 +695,8 @@ def fetch_broll(query: str, format_type: str, segment_index: int, duration: floa
     # 5. Fetch Pixabay candidates (up to 2)
     if PIXABAY_API_KEY:
         for q in queries_to_try[:2]:
+            if budget_exceeded():
+                break
             px_cands = _pixabay_candidates(q, n=2)
             if px_cands:
                 candidates.extend(px_cands)
@@ -695,6 +715,8 @@ def fetch_broll(query: str, format_type: str, segment_index: int, duration: floa
         thumbs = []
         valid_candidates = []
         for idx, cand in enumerate(candidates):
+            if budget_exceeded():
+                break
             try:
                 r_thumb = requests.get(cand["thumb_url"], timeout=15)
                 r_thumb.raise_for_status()
@@ -742,6 +764,8 @@ def fetch_broll(query: str, format_type: str, segment_index: int, duration: floa
     from pipeline.vision_match import vision_rank_broll
 
     for label, fetch_url_fn in other_videos:
+        if budget_exceeded():
+            break
         video_url = fetch_url_fn()
         if video_url:
             # Check de-duplication
