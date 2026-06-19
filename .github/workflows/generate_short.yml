@@ -69,7 +69,11 @@ jobs:
         run: |
           for attempt in 1 2; do
             echo "Generate attempt ${attempt}/2"
-            timeout 32m python run_generate.py --format short && exit 0
+            resume_arg=""
+            if [ "$attempt" -gt 1 ] && [ -d output ]; then
+              resume_arg="--resume"
+            fi
+            timeout 32m python run_generate.py --format short $resume_arg && exit 0
             code=$?
             if [ "$code" -eq 124 ]; then
               echo "Generate attempt ${attempt} timed out"

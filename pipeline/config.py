@@ -7,12 +7,12 @@ import os
 # with per-minute rate limits (RPM throttling).
 def _load_keys() -> list[str]:
     keys: list[str] = []
-    single = os.environ.get("GEMINI_API_KEY", "").strip()
-    if single:
-        keys.append(single)
     multi = os.environ.get("GEMINI_API_KEYS", "").strip()
     if multi:
         keys.extend(k.strip() for k in multi.split(",") if k.strip())
+    single = os.environ.get("GEMINI_API_KEY", "").strip()
+    if single and not keys:
+        keys.append(single)
     return list(dict.fromkeys(keys))
 
 GEMINI_API_KEYS: list[str] = _load_keys()
