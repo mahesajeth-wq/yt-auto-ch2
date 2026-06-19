@@ -4,7 +4,83 @@ import requests
 import urllib.parse
 import subprocess
 import time
-from pipeline.config import PEXELS_API_KEY, PIXABAY_API_KEY, COVERR_API_KEY, NASA_API_KEY
+from pipeline.config import PEXELS_API_KEY, PIXABAY_API_KEY, COVERR_API_KEY, NASA_API_KEY, KLIPY_API_KEY
+
+
+def _nasa_params(query: str, media_type: str, page_size: int) -> dict:
+    params = {"q": query, "media_type": media_type, "page_size": page_size}
+    if NASA_API_KEY and NASA_API_KEY != "DEMO_KEY":
+        params["api_key"] = NASA_API_KEY
+    return params
+
+
+def _walk_urls(obj) -> list[str]:
+    urls: list[str] = []
+    if isinstance(obj, dict):
+        for value in obj.values():
+            urls.extend(_walk_urls(value))
+    elif isinstance(obj, list):
+        for value in obj:
+            urls.extend(_walk_urls(value))
+    elif isinstance(obj, str) and obj.startswith("http"):
+        urls.append(obj)
+    return urls
+
+
+def _pick_klipy_urls(item: dict) -> tuple[str | None, str | None]:
+    urls = _walk_urls(item)
+    video_url = None
+    thumb_url = None
+    for ext in (".mp4", ".webm", ".gif"):
+        video_url = next((u for u in urls if ext in u.lower()), None)
+        if video_url:
+            break
+    for ext in (".jpg", ".jpeg", ".png", ".webp"):
+        thumb_url = next((u for u in urls if ext in u.lower()), None)
+        if thumb_url:
+            break
+    if not thumb_url:
+        thumb_url = video_url
+    return video_url, thumb_url
+
+
+def _klipy_candidates(query: str, n: int = 4) -> list[dict]:
+    if not KLIPY_API_KEY:
+        return []
+    try:
+        r = requests.get(
+            f"https://api.klipy.com/api/v1/{KLIPY_API_KEY}/gifs/search",
+            params={"q": query, "per_page": max(8, n), "rating": "pg-13", "locale": "en_US"},
+            headers={"User-Agent": "yt-auto/1.0"},
+            timeout=25,
+        )
+        r.raise_for_status()
+        data = r.json()
+        items = data.get("data") or data.get("results") or data.get("gifs") or []
+        if isinstance(items, dict):
+            items = list(items.values())
+        candidates = []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            video_url, thumb_url = _pick_klipy_urls(item)
+            if video_url and thumb_url:
+                candidates.append({
+                    "video_url": video_url,
+                    "thumb_url": thumb_url,
+                    "source": "Klipy"
+                })
+            if len(candidates) >= n:
+                break
+        return candidates
+    except Exception as e:
+        print(f"[B-roll] Klipy search failed for '{query}': {e}")
+        return []
+
+
+def _klipy_video(query: str) -> str | None:
+    candidates = _klipy_candidates(query, n=1)
+    return candidates[0]["video_url"] if candidates else None
 
 
 # ── Source 1: Pexels Candidates ──────────────────────────────────────────────
@@ -171,7 +247,7 @@ def _nasa_video_candidate(query: str) -> dict | None:
     try:
         r = requests.get(
             "https://images-api.nasa.gov/search",
-            params={"q": query, "media_type": "video", "page_size": 3},
+            params=_nasa_params(query, "video", 3),
             headers={"User-Agent": "yt-auto/1.0"},
             timeout=20,
         )
@@ -287,9 +363,7 @@ def _nasa_image(query: str) -> str | None:
         r = requests.get(
             "https://images-api.nasa.gov/search",
             params={
-                "q": query,
-                "media_type": "image",
-                "page_size": 5,
+                **_nasa_params(query, "image", 5),
             },
             headers={"User-Agent": "yt-auto/1.0 (educational-pipeline)"},
             timeout=20,
@@ -389,9 +463,7 @@ def _nasa_video(query: str) -> str | None:
         r = requests.get(
             "https://images-api.nasa.gov/search",
             params={
-                "q": query,
-                "media_type": "video",
-                "page_size": 5,
+                **_nasa_params(query, "video", 5),
             },
             headers={"User-Agent": "yt-auto/1.0 (educational-pipeline)"},
             timeout=20,
@@ -473,16 +545,18 @@ def _download_video_robust(url: str, out_path: str, segment_index: int) -> bool:
         parsed = urllib.parse.urlparse(url)
         path = parsed.path.lower()
         is_webm = path.endswith(".webm") or path.endswith(".ogv")
+        is_gif = path.endswith(".gif")
 
-        temp_file = f"output/temp_dl_{segment_index}" + (".webm" if is_webm else ".mp4")
+        temp_ext = ".webm" if is_webm else ".gif" if is_gif else ".mp4"
+        temp_file = f"output/temp_dl_{segment_index}{temp_ext}"
         with open(temp_file, "wb") as f:
             for chunk in r.iter_content(chunk_size=8192):
                 if chunk:
                     f.write(chunk)
 
         if os.path.exists(temp_file) and os.path.getsize(temp_file) > 10_000:
-            if is_webm:
-                print(f"[B-roll] Converting webm/ogv from {url} to mp4...")
+            if is_webm or is_gif:
+                print(f"[B-roll] Converting {temp_ext} from {url} to mp4...")
                 cmd = [
                     "ffmpeg", "-y", "-i", temp_file,
                     "-c:v", "libx264", "-preset", "fast", "-crf", "23",
@@ -682,7 +756,17 @@ def fetch_broll(query: str, format_type: str, segment_index: int, duration: floa
                 candidates.extend(c_cands)
                 break
 
-    # 4. Fetch Pexels candidates (up to 2)
+    # 4. Fetch Klipy GIF/meme candidates (converted to MP4 if selected)
+    if KLIPY_API_KEY:
+        for q in queries_to_try[:2]:
+            if budget_exceeded():
+                break
+            k_cands = _klipy_candidates(q, n=2)
+            if k_cands:
+                candidates.extend(k_cands)
+                break
+
+    # 5. Fetch Pexels candidates (up to 2)
     if PEXELS_API_KEY:
         for q in queries_to_try[:2]:
             if budget_exceeded():
@@ -692,7 +776,7 @@ def fetch_broll(query: str, format_type: str, segment_index: int, duration: floa
                 candidates.extend(p_cands)
                 break
 
-    # 5. Fetch Pixabay candidates (up to 2)
+    # 6. Fetch Pixabay candidates (up to 2)
     if PIXABAY_API_KEY:
         for q in queries_to_try[:2]:
             if budget_exceeded():
@@ -753,6 +837,8 @@ def fetch_broll(query: str, format_type: str, segment_index: int, duration: floa
         ("Pixabay (fallback)", lambda: _pixabay_video(fallback_query)),
         ("Coverr (main)", lambda: _coverr_video(query)),
         ("Coverr (fallback)", lambda: _coverr_video(fallback_query)),
+        ("Klipy GIF (main)", lambda: _klipy_video(query)),
+        ("Klipy GIF (fallback)", lambda: _klipy_video(fallback_query)),
         ("NASA video (main)", lambda: _nasa_video(query)),
         ("NASA video (fallback)", lambda: _nasa_video(fallback_query)),
         ("Wikimedia video (main)", lambda: _wikimedia_video(query)),

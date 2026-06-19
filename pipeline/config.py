@@ -101,5 +101,7 @@ def validate_config():
         print("[Config] Coverr API: enabled (cinematic B-roll tier active).")
     if NASA_API_KEY:
         print(f"[Config] NASA API: enabled (key={'DEMO_KEY (rate-limited)' if NASA_API_KEY == 'DEMO_KEY' else 'custom'}).")
+    if KLIPY_API_KEY:
+        print("[Config] Klipy API: enabled (GIF/meme B-roll tier active).")
     if FREESOUND_API_KEY:
         print("[Config] Freesound API: enabled (CC0 ambient music tier active).")

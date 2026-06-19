@@ -148,14 +148,16 @@ Please watch the video and evaluate it against these 5 rubrics:
 4. **Music & Audio Quality**: Is the background music clean, and is it mixed correctly without overpowering the voiceover?
 5. **Retention & Loopability**: Does the video contain a retention element (like a rewatch callout in segment 4)? Does it loop back seamlessly from the last segment to the first segment's narration? Note: Segment 5 echoing Segment 1's THEME (not its exact wording) is the desired outcome — flag verbatim repetition of Segment 1's sentence as a script-quality issue.
 
+Scoring target: a publishable video should land around 91-94 when it has coherent visuals, readable captions, clean audio, strong hook, and no repeated clips. Reserve 80-90 for technically acceptable but weak videos that should be repaired before publishing.
+
 You MUST return your review ONLY as a raw JSON object with no markdown syntax. The JSON structure must be exactly like this:
 {{
-  "score": 85, // Overall quality score (0-100)
-  "status": "PASSED", // "PASSED" if score >= 80 and no critical mismatches/repeated clips, otherwise "REJECTED"
+  "score": 91, // Overall quality score (0-100)
+  "status": "PASSED", // "PASSED" if score >= 91 and no critical mismatches/repeated clips, otherwise "REJECTED"
   "reason": "Explain the decision in detail",
-  "cohesiveness_score": 90, // 0-100 score for audio-visual-caption matching
-  "hook_score": 80, // 0-100 score for hook appeal
-  "retention_score": 85, // 0-100 score for looping and retention triggers
+  "cohesiveness_score": 91, // 0-100 score for audio-visual-caption matching
+  "hook_score": 91, // 0-100 score for hook appeal
+  "retention_score": 91, // 0-100 score for looping and retention triggers
   "failed_segments": [3, 4], // 0-based indices of segments that had bad B-roll, generic placeholders, or mismatches, or empty [] if none
   "issues": ["List of specific issues found, or empty if none"]
 }}

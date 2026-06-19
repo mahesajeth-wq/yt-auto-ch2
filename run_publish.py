@@ -68,7 +68,7 @@ def main():
             except Exception as judge_err:
                 print(f"Warning: Judge AI review encountered an error: {judge_err}.")
                 print("Proceeding with upload (fallback due to Judge AI system error)...")
-                report = {"status": "PASSED", "score": 100, "reason": "Bypassed due to Judge API error"}
+                report = {"status": "PASSED", "score": 91, "reason": "Bypassed due to Judge API error"}
                 
         status = report.get("status", "REJECTED")
         score = report.get("score", 0)
