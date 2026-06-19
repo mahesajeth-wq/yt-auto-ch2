@@ -2,15 +2,18 @@ name: Generate Long Video
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '0 15 * * 0'    # Sunday 15:00 UTC — Long-form (10 AM EST)
 
 permissions:
   contents: write             # needed to commit published_topics.json + voice_state.json
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   generate-and-publish:
     runs-on: ubuntu-latest
+    timeout-minutes: 180
 
     steps:
       - uses: actions/checkout@v4
@@ -45,6 +48,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Generate Long
+        timeout-minutes: 150
         env:
           GEMINI_API_KEY:    ${{ secrets.GEMINI_API_KEY }}
           PEXELS_API_KEY:    ${{ secrets.PEXELS_API_KEY }}
@@ -57,9 +61,20 @@ jobs:
           GEMINI_API_KEYS:   ${{ secrets.GEMINI_API_KEYS }}
           GEMINI_JUDGE_API_KEY: ${{ secrets.GEMINI_JUDGE_API_KEY }}
           FREESOUND_API_KEY: ${{ secrets.FREESOUND_API_KEY }}
-        run: python run_generate.py --format long
+        run: |
+          for attempt in 1 2; do
+            echo "Generate attempt ${attempt}/2"
+            if timeout 70m python run_generate.py --format long; then
+              exit 0
+            fi
+            code=$?
+            echo "Generate attempt ${attempt} failed or timed out with exit ${code}"
+            sleep 30
+          done
+          exit 1
 
       - name: Publish to YouTube
+        timeout-minutes: 30
         env:
           YT_CLIENT_ID:      ${{ secrets.YT_CLIENT_ID }}
           YT_CLIENT_SECRET:  ${{ secrets.YT_CLIENT_SECRET }}

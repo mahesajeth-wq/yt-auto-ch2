@@ -2,16 +2,18 @@ name: Generate Short Video
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '0 17 * * *'    # daily 17:00 UTC — Short 1 (12 PM EST)
-    - cron: '0 23 * * *'    # daily 23:00 UTC — Short 2 (6 PM EST)
 
 permissions:
   contents: write             # needed to commit published_topics.json + voice_state.json
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   generate-and-publish:
     runs-on: ubuntu-latest
+    timeout-minutes: 90
 
     steps:
       - uses: actions/checkout@v4
@@ -46,6 +48,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Generate Short
+        timeout-minutes: 70
         env:
           GEMINI_API_KEY:    ${{ secrets.GEMINI_API_KEY }}
           PEXELS_API_KEY:    ${{ secrets.PEXELS_API_KEY }}
@@ -58,9 +61,20 @@ jobs:
           GEMINI_API_KEYS:   ${{ secrets.GEMINI_API_KEYS }}
           GEMINI_JUDGE_API_KEY: ${{ secrets.GEMINI_JUDGE_API_KEY }}
           FREESOUND_API_KEY: ${{ secrets.FREESOUND_API_KEY }}
-        run: python run_generate.py --format short
+        run: |
+          for attempt in 1 2; do
+            echo "Generate attempt ${attempt}/2"
+            if timeout 32m python run_generate.py --format short; then
+              exit 0
+            fi
+            code=$?
+            echo "Generate attempt ${attempt} failed or timed out with exit ${code}"
+            sleep 30
+          done
+          exit 1
 
       - name: Publish to YouTube
+        timeout-minutes: 20
         env:
           YT_CLIENT_ID:      ${{ secrets.YT_CLIENT_ID }}
           YT_CLIENT_SECRET:  ${{ secrets.YT_CLIENT_SECRET }}
