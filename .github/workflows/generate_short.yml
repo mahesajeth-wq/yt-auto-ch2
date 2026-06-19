@@ -96,7 +96,17 @@ jobs:
           GEMINI_API_KEY:    ${{ secrets.GEMINI_API_KEY }}
           GEMINI_API_KEYS:   ${{ secrets.GEMINI_API_KEYS }}
           GEMINI_JUDGE_API_KEY: ${{ secrets.GEMINI_JUDGE_API_KEY }}
-        run: timeout 15m python run_publish.py
+        run: |
+          for attempt in 1 2 3; do
+            echo "Publish attempt ${attempt}/3"
+            timeout 15m python run_publish.py && exit 0
+            code=$?
+            echo "Publish attempt ${attempt} failed with exit ${code}"
+            if [ "$attempt" -lt 3 ]; then
+              sleep $((attempt * 120))
+            fi
+          done
+          exit 1
 
       - name: Upload video artifact
         if: always()
@@ -107,6 +117,9 @@ jobs:
             output/final_short.mp4
             output/thumbnail.jpg
             output/metadata.json
+            output/judge_report.json
+            output/topic.json
+            output/script.json
           retention-days: 7
 
       - name: Commit state files
