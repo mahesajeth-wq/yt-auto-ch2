@@ -115,26 +115,30 @@ class _KeyPool:
                 return self._keys[candidate_idx]
         return None
 
-    def mark_failed(self, key: str, status_code: int = 429):
+    def mark_failed(self, key: str, status_code: int = 429, transient: bool = True):
         if key not in self._keys:
             return
         idx = self._keys.index(key)
-        self._failures[idx] += 1
         
-        f_count = self._failures[idx]
         now = time.time()
-        if f_count == 1:
-            cooldown_duration = 60.0
-        elif f_count == 2:
-            cooldown_duration = 900.0  # 15 mins
-        elif f_count == 3:
-            cooldown_duration = 7200.0  # 2 hours
+        if not transient:
+            # Permanent daily quota exhaustion or key invalidation
+            self._failures[idx] = max(4, self._failures[idx] + 1)
+            cooldown_duration = 86400.0  # 24 hours
         else:
-            cooldown_duration = 86400.0  # 24 hours (1 day)
+            # Transient rate limit (RPM/TPM) or server error
+            if status_code in (500, 502, 503, 504):
+                cooldown_duration = 10.0  # 10s for temporary server errors
+            else:
+                cooldown_duration = 60.0  # 60s for RPM limits (resets every minute)
+            
+            # Reset failure count if it was high, as this is transient
+            if self._failures[idx] >= 3:
+                self._failures[idx] = 1
 
         self._cooldowns[idx] = now + cooldown_duration
         slot = idx + 1
-        print(f"[KeyPool] Key slot {slot}/{len(self._keys)} failed (status {status_code}). Cooldown for {cooldown_duration:.0f}s (Until: {time.strftime('%H:%M:%S', time.localtime(self._cooldowns[idx]))})")
+        print(f"[KeyPool] Key slot {slot}/{len(self._keys)} marked failed (status {status_code}, transient={transient}). Cooldown for {cooldown_duration:.0f}s (Until: {time.strftime('%H:%M:%S', time.localtime(self._cooldowns[idx]))})")
         self._save_state()
 
     def mark_success(self, key: str):
@@ -151,6 +155,22 @@ class _KeyPool:
 
 # One shared pool for all GeminiClient instances that don't pin a key
 _shared_pool = _KeyPool(GEMINI_API_KEYS)
+
+
+def _is_daily_quota_exhausted(resp: requests.Response) -> bool:
+    try:
+        data = resp.json()
+        msg = data.get("error", {}).get("message", "").lower()
+        if "day" in msg or "daily" in msg or "quota" in msg:
+            return True
+    except Exception:
+        pass
+    try:
+        if "daily limit" in resp.text.lower() or "queries per day" in resp.text.lower():
+            return True
+    except Exception:
+        pass
+    return False
 
 
 def _post_with_rotation(
@@ -174,48 +194,83 @@ def _post_with_rotation(
 
         url = url_template.format(key=key)
         slot = _shared_pool._keys.index(key) + 1
-        try:
-            resp = requests.post(
-                url, json=payload, timeout=timeout,
-                headers={"Content-Type": "application/json"},
-            )
-            if resp.status_code == 429:
-                print(f"[GeminiClient] 429 on key slot {slot}. Rotating…")
-                _shared_pool.mark_failed(key, 429)
-                _shared_pool._idx += 1
-                continue
-            if resp.status_code in (500, 502, 503, 504):
-                print(f"[GeminiClient] {resp.status_code} on key slot {slot}. Rotating…")
-                _shared_pool.mark_failed(key, resp.status_code)
-                # Set temporary short cooldown (10s) for server errors
-                _shared_pool._cooldowns[slot-1] = time.time() + 10.0
-                _shared_pool._idx += 1
-                continue
-            resp.raise_for_status()
-            # Success! Reset consecutive failure count
-            _shared_pool.mark_success(key)
-            return resp
-        except requests.exceptions.HTTPError as exc:
-            if exc.response is not None and 400 <= exc.response.status_code < 500:
-                if exc.response.status_code in (400, 403):
-                    print(f"[GeminiClient] HTTP {exc.response.status_code} error on key slot {slot}: {exc}")
-                    _shared_pool.mark_failed(key, exc.response.status_code)
-                    # For exhausted/invalid key, apply direct 24 hour cooldown
-                    _shared_pool._cooldowns[slot-1] = time.time() + 86400.0
-                    _shared_pool._idx += 1
+        
+        # Try up to 3 times with the same key for transient issues
+        same_key_attempts = 3
+        
+        for k_attempt in range(same_key_attempts):
+            try:
+                resp = requests.post(
+                    url, json=payload, timeout=timeout,
+                    headers={"Content-Type": "application/json"},
+                )
+                if resp.status_code == 200:
+                    _shared_pool.mark_success(key)
+                    return resp
+                    
+                if resp.status_code == 429:
+                    if _is_daily_quota_exhausted(resp):
+                        print(f"[GeminiClient] Daily quota exhausted on key slot {slot}. Rotating…")
+                        _shared_pool.mark_failed(key, 429, transient=False)
+                        _shared_pool._idx += 1
+                        break  # Break inner loop to rotate key
+                    else:
+                        # RPM limit: retry with backoff or rotate if out of attempts
+                        if k_attempt < same_key_attempts - 1:
+                            wait_s = (k_attempt + 1) * 3
+                            print(f"[GeminiClient] 429 RPM limit on key slot {slot} (attempt {k_attempt+1}/{same_key_attempts}). Waiting {wait_s}s...")
+                            time.sleep(wait_s)
+                            continue
+                        else:
+                            print(f"[GeminiClient] 429 RPM limit persisted on key slot {slot}. Rotating…")
+                            _shared_pool.mark_failed(key, 429, transient=True)
+                            _shared_pool._idx += 1
+                            break
+                            
+                elif resp.status_code in (500, 502, 503, 504):
+                    if k_attempt < same_key_attempts - 1:
+                        wait_s = (k_attempt + 1) * 2
+                        print(f"[GeminiClient] {resp.status_code} server error on key slot {slot} (attempt {k_attempt+1}/{same_key_attempts}). Waiting {wait_s}s...")
+                        time.sleep(wait_s)
+                        continue
+                    else:
+                        print(f"[GeminiClient] {resp.status_code} persisted on key slot {slot}. Rotating…")
+                        _shared_pool.mark_failed(key, resp.status_code, transient=True)
+                        _shared_pool._idx += 1
+                        break
+                        
+                elif resp.status_code in (400, 403):
+                    # Check if it is a credential error vs safety block
+                    err_msg = ""
+                    try:
+                        err_msg = resp.json().get("error", {}).get("message", "")
+                    except Exception:
+                        err_msg = resp.text
+                        
+                    is_cred_err = any(word in err_msg.lower() for word in ["valid", "key", "blocked", "unauthorized", "api_key"])
+                    if is_cred_err:
+                        print(f"[GeminiClient] Credential error {resp.status_code} on key slot {slot}: {err_msg}. Disabling key…")
+                        _shared_pool.mark_failed(key, resp.status_code, transient=False)
+                        _shared_pool._idx += 1
+                        break
+                    else:
+                        print(f"[GeminiClient] HTTP {resp.status_code} client error on key slot {slot}: {err_msg}")
+                        resp.raise_for_status()
+                else:
+                    resp.raise_for_status()
+                    
+            except requests.exceptions.RequestException as exc:
+                if k_attempt < same_key_attempts - 1:
+                    wait_s = (k_attempt + 1) * 2
+                    print(f"[GeminiClient] Network error on key slot {slot} (attempt {k_attempt+1}/{same_key_attempts}): {exc}. Waiting {wait_s}s...")
+                    time.sleep(wait_s)
                     continue
-                raise
-            print(f"[GeminiClient] HTTP error (attempt {attempt+1}): {exc}. Rotating/Retrying…")
-            _shared_pool.mark_failed(key, 500)
-            _shared_pool._idx += 1
-            time.sleep(2)
-        except Exception as exc:
-            if attempt == max_attempts - 1:
-                raise
-            print(f"[GeminiClient] Request error (attempt {attempt+1}): {exc}. Retrying…")
-            _shared_pool.mark_failed(key, 0)
-            _shared_pool._idx += 1
-            time.sleep(3)
+                else:
+                    print(f"[GeminiClient] Network error persisted on key slot {slot}. Rotating…")
+                    _shared_pool.mark_failed(key, 0, transient=True)
+                    _shared_pool._idx += 1
+                    break
+                    
     raise RuntimeError("Gemini: all keys exhausted. Try again later.")
 
 

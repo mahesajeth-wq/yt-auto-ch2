@@ -35,7 +35,7 @@ def upload_file_to_gemini(filepath: str, api_key: str) -> dict:
     file_size = os.path.getsize(filepath)
     filename = os.path.basename(filepath)
     
-    print(f"Uploading file '{filename}' ({file_size / (1024*1024):.2f} MB) to Gemini Files API via simple upload...")
+    print(f"Uploading file '{filename}' ({file_size / (1024*1024):.2f} MB) to Gemini Files API...")
     
     url = f"https://generativelanguage.googleapis.com/upload/v1beta/files?uploadType=media&key={api_key}"
     headers = {
@@ -48,9 +48,29 @@ def upload_file_to_gemini(filepath: str, api_key: str) -> dict:
     with open(filepath, "rb") as f:
         file_bytes = f.read()
         
-    response = requests.post(url, headers=headers, data=file_bytes, timeout=300)
-    response.raise_for_status()
-    return response.json()
+    for attempt in range(4):
+        try:
+            response = requests.post(url, headers=headers, data=file_bytes, timeout=300)
+            if response.status_code == 429:
+                wait_s = (attempt + 1) * 10
+                print(f"[JudgeAI] Upload 429 rate limit. Retrying in {wait_s}s...")
+                time.sleep(wait_s)
+                continue
+            if response.status_code in (500, 502, 503, 504):
+                wait_s = (attempt + 1) * 5
+                print(f"[JudgeAI] Upload {response.status_code} server error. Retrying in {wait_s}s...")
+                time.sleep(wait_s)
+                continue
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            if attempt == 3:
+                raise
+            wait_s = (attempt + 1) * 5
+            print(f"[JudgeAI] Upload network error: {e}. Retrying in {wait_s}s...")
+            time.sleep(wait_s)
+            
+    raise RuntimeError("Failed to upload video file after retries.")
 
 
 def wait_for_file_active(file_name: str, api_key: str, max_timeout_seconds: int = 180) -> bool:
@@ -59,31 +79,50 @@ def wait_for_file_active(file_name: str, api_key: str, max_timeout_seconds: int 
     
     start_time = time.time()
     while time.time() - start_time < max_timeout_seconds:
-        response = requests.get(url, timeout=30)
-        response.raise_for_status()
-        data = response.json()
-        state = data.get("state")
-        
-        if state == "ACTIVE":
-            print("Video file is now ACTIVE and ready for query.")
-            return True
-        elif state == "FAILED":
-            raise RuntimeError(f"File processing failed on Gemini Files API: {data}")
-        else:
-            print(f"Current file state is '{state}'. Retrying in 5 seconds...")
+        try:
+            response = requests.get(url, timeout=30)
+            if response.status_code == 429:
+                print("[JudgeAI] Polling file status returned 429. Waiting 10 seconds...")
+                time.sleep(10)
+                continue
+            if response.status_code in (500, 502, 503, 504):
+                print(f"[JudgeAI] Polling file status returned {response.status_code}. Waiting 5 seconds...")
+                time.sleep(5)
+                continue
+            response.raise_for_status()
+            data = response.json()
+            state = data.get("state")
+            
+            if state == "ACTIVE":
+                print("Video file is now ACTIVE and ready for query.")
+                return True
+            elif state == "FAILED":
+                raise RuntimeError(f"File processing failed on Gemini Files API: {data}")
+            else:
+                print(f"Current file state is '{state}'. Retrying in 5 seconds...")
+                time.sleep(5)
+        except requests.exceptions.RequestException as e:
+            print(f"[JudgeAI] Polling status network/HTTP error: {e}. Retrying in 5 seconds...")
             time.sleep(5)
             
     raise TimeoutError("Timeout exceeded waiting for Gemini Files API to activate the file")
 
 def delete_file_from_gemini(file_name: str, api_key: str):
     url = f"https://generativelanguage.googleapis.com/v1beta/{file_name}?key={api_key}"
-    try:
-        print(f"Cleaning up temporary file {file_name} from Gemini storage...")
-        response = requests.delete(url, timeout=30)
-        response.raise_for_status()
-        print("File deleted successfully.")
-    except Exception as e:
-        print(f"Warning: Failed to delete temporary file {file_name}: {e}")
+    for attempt in range(3):
+        try:
+            print(f"Cleaning up temporary file {file_name} from Gemini storage (attempt {attempt+1}/3)...")
+            response = requests.delete(url, timeout=30)
+            if response.status_code == 429:
+                time.sleep(5)
+                continue
+            response.raise_for_status()
+            print("File deleted successfully.")
+            return
+        except Exception as e:
+            if attempt == 2:
+                print(f"Warning: Failed to delete temporary file {file_name}: {e}")
+            time.sleep(3)
 
 class JudgeClient:
     def __init__(self):
@@ -184,27 +223,84 @@ You MUST return your review ONLY as a raw JSON object with no markdown syntax. T
             }
             
             print(f"Sending video to model '{model_to_use}' for analysis...")
-            try:
-                response = requests.post(url, headers=headers, json=payload, timeout=180)
-                response.raise_for_status()
-                response_data = response.json()
-            except Exception as model_err:
-                print(f"Primary model {model_to_use} failed: {model_err}. Falling back to {GEMINI_FLASH}...")
-                model_to_use = GEMINI_FLASH
-                url_fallback = f"{self.base_url}/models/{model_to_use}:generateContent?key={api_key}"
-                # Remove responseMimeType from config for flash if not supported in the endpoint
-                payload["generationConfig"] = {"temperature": 0.2}
-                response = requests.post(url_fallback, headers=headers, json=payload, timeout=180)
-                response.raise_for_status()
-                response_data = response.json()
-                
+            response = None
+            for attempt in range(4):
+                try:
+                    response = requests.post(url, headers=headers, json=payload, timeout=180)
+                    if response.status_code == 429:
+                        wait_s = (attempt + 1) * 15
+                        print(f"[JudgeAI] Review call 429 rate limit. Waiting {wait_s}s...")
+                        time.sleep(wait_s)
+                        continue
+                    if response.status_code in (500, 502, 503, 504):
+                        wait_s = (attempt + 1) * 5
+                        print(f"[JudgeAI] Review call {response.status_code} server error. Waiting {wait_s}s...")
+                        time.sleep(wait_s)
+                        continue
+                    response.raise_for_status()
+                    break
+                except requests.exceptions.RequestException as e:
+                    if attempt == 3:
+                        raise
+                    wait_s = (attempt + 1) * 5
+                    print(f"[JudgeAI] Review call network error: {e}. Waiting {wait_s}s...")
+                    time.sleep(wait_s)
+                    
+            if response is None:
+                raise RuntimeError("Failed to get review response after retries")
+            response_data = response.json()
+            
+            # Extract and parse response
             try:
                 text_response = response_data["candidates"][0]["content"]["parts"][0]["text"]
             except (KeyError, IndexError) as parse_err:
-                raise RuntimeError(f"Unexpected response format from Gemini: {response_data}") from parse_err
+                # If primary failed, we will trigger the fallback check in the except block
+                raise RuntimeError(f"Unexpected response format: {response_data}") from parse_err
                 
             report = json.loads(_clean_json_output(text_response))
             print(f"Judge AI Review complete. Status: {report.get('status')} (Score: {report.get('score')}/100)")
+            return report
+            
+        except Exception as model_err:
+            print(f"Primary model review failed: {model_err}. Falling back to {GEMINI_FLASH}...")
+            model_to_use = GEMINI_FLASH
+            url_fallback = f"{self.base_url}/models/{model_to_use}:generateContent?key={api_key}"
+            payload["generationConfig"] = {"temperature": 0.2}
+            
+            response = None
+            for attempt in range(4):
+                try:
+                    response = requests.post(url_fallback, headers=headers, json=payload, timeout=180)
+                    if response.status_code == 429:
+                        wait_s = (attempt + 1) * 15
+                        print(f"[JudgeAI][fallback] 429 rate limit. Waiting {wait_s}s...")
+                        time.sleep(wait_s)
+                        continue
+                    if response.status_code in (500, 502, 503, 504):
+                        wait_s = (attempt + 1) * 5
+                        print(f"[JudgeAI][fallback] {response.status_code} server error. Waiting {wait_s}s...")
+                        time.sleep(wait_s)
+                        continue
+                    response.raise_for_status()
+                    break
+                except requests.exceptions.RequestException as e:
+                    if attempt == 3:
+                        raise
+                    wait_s = (attempt + 1) * 5
+                    print(f"[JudgeAI][fallback] Network error: {e}. Waiting {wait_s}s...")
+                    time.sleep(wait_s)
+                    
+            if response is None:
+                raise RuntimeError("Failed to get fallback review response after retries")
+            response_data = response.json()
+            
+            try:
+                text_response = response_data["candidates"][0]["content"]["parts"][0]["text"]
+            except (KeyError, IndexError) as parse_err:
+                raise RuntimeError(f"Unexpected fallback response format: {response_data}") from parse_err
+                
+            report = json.loads(_clean_json_output(text_response))
+            print(f"Judge AI Review complete via fallback. Status: {report.get('status')} (Score: {report.get('score')}/100)")
             return report
             
         finally:
