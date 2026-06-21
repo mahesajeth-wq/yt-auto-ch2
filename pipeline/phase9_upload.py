@@ -54,6 +54,7 @@ def upload_to_youtube(video_path: str, thumbnail_path: str, metadata: dict) -> s
     publish_at = metadata.get("publish_at")
     if publish_at:
         status_body["publishAt"] = publish_at
+        status_body["privacyStatus"] = "private"
         
     body = {
         "snippet": {

@@ -4,22 +4,20 @@ import random
 from pipeline.config import HOOK_PATTERNS
 from pipeline.gemini import GeminiClient, _robust_json_loads
 
-def get_next_weekday_2pm_ist_utc():
-    # IST is UTC+5:30. 2:00 PM IST = 14:00 IST = 08:30 AM UTC.
+def get_next_tuesday_3pm_ist_utc():
+    # IST is UTC+5:30. 3:00 PM IST = 15:00 IST = 09:30 AM UTC.
     now = datetime.datetime.now(datetime.timezone.utc)
     ist_offset = datetime.timedelta(hours=5, minutes=30)
     now_ist = now + ist_offset
     
     target_date = now_ist.date()
-    # If it's past 2 PM IST today, start looking from tomorrow
-    if now_ist.time() >= datetime.time(14, 0):
-        target_date += datetime.timedelta(days=1)
+    # Find next Tuesday (1=Tue)
+    days_ahead = (1 - target_date.weekday() + 7) % 7
+    if days_ahead == 0 and now_ist.time() >= datetime.time(15, 0):
+        days_ahead = 7
+    target_date += datetime.timedelta(days=days_ahead)
         
-    # Find next weekday (0=Mon, 1=Tue, 2=Wed, 3=Thu, 4=Fri)
-    while target_date.weekday() >= 5: # Saturday=5, Sunday=6
-        target_date += datetime.timedelta(days=1)
-        
-    target_dt_ist = datetime.datetime.combine(target_date, datetime.time(14, 0))
+    target_dt_ist = datetime.datetime.combine(target_date, datetime.time(15, 0))
     target_dt_utc = target_dt_ist - ist_offset
     return target_dt_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -188,7 +186,7 @@ You MUST return your response ONLY as a raw JSON object with no markdown syntax.
 
     # Add scheduling metadata for long form
     if format_type == "long":
-        script["publish_at"] = get_next_weekday_2pm_ist_utc()
+        script["publish_at"] = get_next_tuesday_3pm_ist_utc()
     else:
         # Default publish_at for shorts: let's set it to None so we can upload as private first
         script["publish_at"] = None
