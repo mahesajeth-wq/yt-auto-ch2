@@ -69,6 +69,8 @@ jobs:
           DM_API_SECRET:    ${{ secrets.DM_API_SECRET }}
           DM_USERNAME:      ${{ secrets.DM_USERNAME }}
           DM_PASSWORD:      ${{ secrets.DM_PASSWORD }}
+          RUMBLE_EMAIL:      ${{ secrets.RUMBLE_EMAIL }}
+          RUMBLE_PASSWORD:   ${{ secrets.RUMBLE_PASSWORD }}
           YT_CLIENT_ID:     ${{ secrets.YT_CLIENT_ID }}
           YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
           YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}

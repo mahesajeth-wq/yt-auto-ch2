@@ -111,6 +111,16 @@ def main():
                 print(f"✅ Successfully published to Dailymotion! Video ID: {dm_id}")
         except Exception as dm_err:
             print(f"⚠️ Warning: Dailymotion upload encountered an error: {dm_err}")
+
+        # --- RUMBLE UPLOAD ---
+        try:
+            print("\n🚀 Initiating Rumble upload...")
+            phase11 = importlib.import_module("pipeline.phase11_rumble")
+            rumble_url = phase11.upload_to_rumble(video_path, metadata)
+            if rumble_url:
+                print(f"✅ Successfully published to Rumble! URL: {rumble_url}")
+        except Exception as rb_err:
+            print(f"⚠️ Warning: Rumble upload encountered an error: {rb_err}")
     except google.auth.exceptions.RefreshError as ref_err:
         print("\n❌ Authentication Error: Refresh token may have expired or is invalid.")
         print("Re-generate your refresh token at: https://developers.google.com/oauthplayground")
