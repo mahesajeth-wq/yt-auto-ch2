@@ -8,10 +8,7 @@ from pipeline.config import PEXELS_API_KEY, PIXABAY_API_KEY, COVERR_API_KEY, NAS
 
 
 def _nasa_params(query: str, media_type: str, page_size: int) -> dict:
-    params = {"q": query, "media_type": media_type, "page_size": page_size}
-    if NASA_API_KEY and NASA_API_KEY != "DEMO_KEY":
-        params["api_key"] = NASA_API_KEY
-    return params
+    return {"q": query, "media_type": media_type, "page_size": page_size}
 
 
 def _walk_urls(obj) -> list[str]:
