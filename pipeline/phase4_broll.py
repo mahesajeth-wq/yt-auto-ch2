@@ -212,7 +212,7 @@ def _pixabay_candidates(query: str, n: int = 3) -> list[dict]:
     try:
         r = requests.get(
             "https://pixabay.com/api/videos/",
-            params={"key": PIXABAY_API_KEY, "q": query, "per_page": n},
+            params={"key": PIXABAY_API_KEY, "q": query, "per_page": max(3, n)},
             timeout=30,
         )
         r.raise_for_status()

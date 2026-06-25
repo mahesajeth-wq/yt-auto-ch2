@@ -80,7 +80,11 @@ def _fetch_freesound_music(topic: str, duration_seconds: int) -> str | None:
         return None
 
     search_url = "https://freesound.org/apiv2/search/text/"
-    queries = [f"{topic} cinematic synth", "cinematic suspense synth", "sci-fi tension loop"]
+    if "wedding" in topic.lower() or "marriage" in topic.lower() or "romantic" in topic.lower():
+        queries = [f"{topic} ambient", "romantic wedding ambient", "indian wedding instrumental"]
+    else:
+        queries = [f"{topic} cinematic synth", "cinematic suspense synth", "sci-fi tension loop"]
+
 
     for query in queries:
         print(f"[Music] Searching Freesound for '{query}' ...")
@@ -173,7 +177,12 @@ def generate_music(topic: str, duration_seconds: int = 35) -> str:
     track = np.tile(loop, reps)[: int(duration_seconds * SAMPLE_RATE)]
     # Tick every 0.5s (120 BPM) for high-tension pacing
     tick_interval = int(0.5 * SAMPLE_RATE)
-    track = track + _shaker(len(track), int(chord_dur * SAMPLE_RATE / 2)) + _ticking_clock(len(track), tick_interval)
+    if "wedding" in topic.lower() or "marriage" in topic.lower() or "romantic" in topic.lower():
+        # Soft ambient pads only (no shaker, no clock)
+        track = track * 0.4
+    else:
+        track = track + _shaker(len(track), int(chord_dur * SAMPLE_RATE / 2)) + _ticking_clock(len(track), tick_interval)
+
 
     track = track / (np.max(np.abs(track)) + 1e-9) * 0.65
     track_int16 = (track * 32767).clip(-32768, 32767).astype(np.int16)
