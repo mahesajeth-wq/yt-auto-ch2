@@ -161,7 +161,7 @@ def _is_daily_quota_exhausted(resp: requests.Response) -> bool:
     try:
         data = resp.json()
         msg = data.get("error", {}).get("message", "").lower()
-        if ("day" in msg or "daily" in msg or "quota" in msg) and "minute" not in msg and "second" not in msg:
+        if ("day" in msg or "daily" in msg) and "minute" not in msg and "second" not in msg:
             return True
     except Exception:
         pass
