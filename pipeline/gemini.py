@@ -160,13 +160,20 @@ _shared_pool = _KeyPool(GEMINI_API_KEYS)
 def _is_daily_quota_exhausted(resp: requests.Response) -> bool:
     try:
         data = resp.json()
-        msg = data.get("error", {}).get("message", "").lower()
-        if ("day" in msg or "daily" in msg) and "minute" not in msg and "second" not in msg:
+        error_data = data.get("error", {})
+        msg = error_data.get("message", "").lower()
+        import json
+        details_str = json.dumps(error_data.get("details", [])).lower()
+        if "perday" in details_str or "free_tier_requests" in details_str:
+            return True
+        if ("day" in msg or "daily" in msg or "free_tier_requests" in msg or "quota exceeded" in msg) and "minute" not in msg and "second" not in msg:
             return True
     except Exception:
         pass
     try:
         text_lower = resp.text.lower()
+        if "free_tier_requests" in text_lower or "perday" in text_lower:
+            return True
         if ("daily limit" in text_lower or "queries per day" in text_lower) and "minute" not in text_lower and "second" not in text_lower:
             return True
     except Exception:

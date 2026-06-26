@@ -52,6 +52,10 @@ def upload_file_to_gemini(filepath: str, api_key: str) -> dict:
         try:
             response = requests.post(url, headers=headers, data=file_bytes, timeout=300)
             if response.status_code == 429:
+                from pipeline.gemini import _is_daily_quota_exhausted
+                if _is_daily_quota_exhausted(response):
+                    print("[JudgeAI] Upload call daily quota exhausted. Rotating immediately.")
+                    raise requests.exceptions.HTTPError("Daily quota exhausted during upload", response=response)
                 wait_s = (attempt + 1) * 10
                 print(f"[JudgeAI] Upload 429 rate limit. Retrying in {wait_s}s...")
                 time.sleep(wait_s)
@@ -82,6 +86,10 @@ def wait_for_file_active(file_name: str, api_key: str, max_timeout_seconds: int 
         try:
             response = requests.get(url, timeout=30)
             if response.status_code == 429:
+                from pipeline.gemini import _is_daily_quota_exhausted
+                if _is_daily_quota_exhausted(response):
+                    print("[JudgeAI] File status call daily quota exhausted. Rotating immediately.")
+                    raise requests.exceptions.HTTPError("Daily quota exhausted during file status check", response=response)
                 print("[JudgeAI] Polling file status returned 429. Waiting 10 seconds...")
                 time.sleep(10)
                 continue
@@ -145,7 +153,10 @@ class JudgeClient:
                 status = _http_status(exc)
                 print(f"[JudgeAI] Key slot {slot}/{len(_shared_pool)} failed during review (status {status or 'unknown'}): {exc}")
                 if status in RETRIABLE_STATUS_CODES or status == 0:
-                    _shared_pool.mark_failed(api_key, status or 0)
+                    from pipeline.gemini import _is_daily_quota_exhausted
+                    response_obj = getattr(exc, "response", None)
+                    is_daily = response_obj is not None and _is_daily_quota_exhausted(response_obj)
+                    _shared_pool.mark_failed(api_key, status or 0, transient=not is_daily)
                     _shared_pool._idx += 1
                     continue
                 raise
@@ -228,6 +239,10 @@ You MUST return your review ONLY as a raw JSON object with no markdown syntax. T
                 try:
                     response = requests.post(url, headers=headers, json=payload, timeout=180)
                     if response.status_code == 429:
+                        from pipeline.gemini import _is_daily_quota_exhausted
+                        if _is_daily_quota_exhausted(response):
+                            print(f"[JudgeAI] Daily quota exhausted on key slot {slot}. Rotating immediately.")
+                            raise requests.exceptions.HTTPError("Daily quota exhausted during review", response=response)
                         wait_s = (attempt + 1) * 15
                         print(f"[JudgeAI] Review call 429 rate limit. Waiting {wait_s}s...")
                         time.sleep(wait_s)
@@ -272,6 +287,10 @@ You MUST return your review ONLY as a raw JSON object with no markdown syntax. T
                 try:
                     response = requests.post(url_fallback, headers=headers, json=payload, timeout=180)
                     if response.status_code == 429:
+                        from pipeline.gemini import _is_daily_quota_exhausted
+                        if _is_daily_quota_exhausted(response):
+                            print(f"[JudgeAI][fallback] Daily quota exhausted on key slot {slot}. Rotating immediately.")
+                            raise requests.exceptions.HTTPError("Daily quota exhausted during fallback review", response=response)
                         wait_s = (attempt + 1) * 15
                         print(f"[JudgeAI][fallback] 429 rate limit. Waiting {wait_s}s...")
                         time.sleep(wait_s)
