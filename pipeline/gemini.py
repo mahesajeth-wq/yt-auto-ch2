@@ -191,8 +191,17 @@ def _post_with_rotation(
     for attempt in range(max_attempts):
         key = _shared_pool.get_available_key()
         if not key:
-            # All keys are on cooldown! Find the one that finishes earliest
+            # All keys are on cooldown! Check if ALL are permanently dead
             now = time.time()
+            all_permanent = all(
+                _shared_pool._cooldowns[i] > now + 3600
+                for i in range(len(_shared_pool._keys))
+            )
+            if all_permanent:
+                raise RuntimeError(
+                    "Gemini: all keys permanently exhausted (daily quota or disabled). "
+                    "Pipeline cannot proceed. Will auto-recover on next cron slot."
+                )
             earliest_idx = min(range(len(_shared_pool)), key=lambda idx: _shared_pool._cooldowns[idx])
             wait_time = max(1.0, _shared_pool._cooldowns[earliest_idx] - now)
             wait_time = min(15.0, wait_time)  # cap to 15s max sleep
@@ -255,9 +264,14 @@ def _post_with_rotation(
                     except Exception:
                         err_msg = resp.text
                         
-                    is_cred_err = any(word in err_msg.lower() for word in ["valid", "key", "blocked", "unauthorized", "api_key"])
-                    if is_cred_err:
-                        print(f"[GeminiClient] Credential error {resp.status_code} on key slot {slot}: {err_msg}. Disabling key…")
+                    is_cred_err = any(word in err_msg.lower() for word in [
+                        "valid", "key", "blocked", "unauthorized", "api_key",
+                        "denied", "access", "permission", "disabled", "project"
+                    ])
+                    if is_cred_err or resp.status_code == 403:
+                        # ALL 403s are treated as permanent — either credential issue
+                        # or project-level block. Don't spin on a dead key.
+                        print(f"[GeminiClient] Credential/access error {resp.status_code} on key slot {slot}: {err_msg}. Disabling key permanently…")
                         _shared_pool.mark_failed(key, resp.status_code, transient=False)
                         _shared_pool._idx += 1
                         break
