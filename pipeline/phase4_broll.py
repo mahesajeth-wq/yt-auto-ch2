@@ -4,7 +4,8 @@ import requests
 import urllib.parse
 import subprocess
 import time
-from pipeline.config import PEXELS_API_KEY, PIXABAY_API_KEY, COVERR_API_KEY, NASA_API_KEY, KLIPY_API_KEY
+from pipeline.config import PEXELS_API_KEY, PIXABAY_API_KEY, COVERR_API_KEY, NASA_API_KEY, KLIPY_API_KEY, NASA_BROLL_ENABLED
+
 
 
 def _nasa_params(query: str, media_type: str, page_size: int) -> dict:
@@ -723,7 +724,7 @@ def fetch_broll(query: str, format_type: str, segment_index: int, duration: floa
     
     # 1. Fetch NASA video candidate if science/space query
     is_science = any(k in query.lower() for k in ["space", "nasa", "star", "planet", "galaxy", "orbit", "telescope", "asteroid", "science", "physics", "chemical", "atom", "molecule", "earth", "moon", "sun", "nebula", "black hole"])
-    if is_science:
+    if is_science and NASA_BROLL_ENABLED:
         for q in queries_to_try[:2]:
             if budget_exceeded():
                 break
@@ -836,13 +837,19 @@ def fetch_broll(query: str, format_type: str, segment_index: int, duration: floa
         ("Coverr (fallback)", lambda: _coverr_video(fallback_query)),
         ("Klipy GIF (main)", lambda: _klipy_video(query)),
         ("Klipy GIF (fallback)", lambda: _klipy_video(fallback_query)),
-        ("NASA video (main)", lambda: _nasa_video(query)),
-        ("NASA video (fallback)", lambda: _nasa_video(fallback_query)),
+    ]
+    if NASA_BROLL_ENABLED:
+        other_videos.extend([
+            ("NASA video (main)", lambda: _nasa_video(query)),
+            ("NASA video (fallback)", lambda: _nasa_video(fallback_query)),
+        ])
+    other_videos.extend([
         ("Wikimedia video (main)", lambda: _wikimedia_video(query)),
         ("Wikimedia video (fallback)", lambda: _wikimedia_video(fallback_query)),
         ("Archive video (main)", lambda: _archive_video(query)),
         ("Archive video (fallback)", lambda: _archive_video(fallback_query)),
-    ]
+    ])
+
 
     from pipeline.vision_match import vision_rank_broll
 
@@ -889,13 +896,19 @@ def fetch_broll(query: str, format_type: str, segment_index: int, duration: floa
     # ── Fallback 2: image sources (all converted with Ken Burns) ─────────────────────
     print(f"[B-roll] Segment {segment_index}: trying image sources…")
 
-    img_url = None
-    for img_fn, q in [
-        (_nasa_image, query),
-        (_nasa_image, fallback_query),
+    img_sources = []
+    if NASA_BROLL_ENABLED:
+        img_sources.extend([
+            (_nasa_image, query),
+            (_nasa_image, fallback_query),
+        ])
+    img_sources.extend([
         (_wikipedia_image, query),
         (_wikipedia_image, fallback_query)
-    ]:
+    ])
+
+    img_url = None
+    for img_fn, q in img_sources:
         candidate_img = img_fn(q)
         if candidate_img and (used_urls is None or candidate_img not in used_urls):
             img_url = candidate_img
