@@ -158,23 +158,51 @@ _shared_pool = _KeyPool(GEMINI_API_KEYS)
 
 
 def _is_daily_quota_exhausted(resp: requests.Response) -> bool:
+    """Detect daily (RPD) quota exhaustion vs transient RPM/TPM limits.
+
+    The Gemini API returns a structured quotaId in the details array:
+      - 'GenerateRequestsPerDayPerProjectPerModel' → daily RPD limit
+      - 'GenerateRequestsPerMinutePerProjectPerModel' → per-minute RPM limit
+    We MUST check quotaId first. Only treat as daily if:
+      1) quotaId explicitly contains 'PerDay', OR
+      2) details mention 'free_tier_requests' or 'perday' (legacy format)
+    If 'perminute' or 'persecond' appears ANYWHERE, it is NOT daily.
+    """
+    import json as _json
     try:
         data = resp.json()
         error_data = data.get("error", {})
-        msg = error_data.get("message", "").lower()
-        import json
-        details_str = json.dumps(error_data.get("details", [])).lower()
-        if "perday" in details_str or "free_tier_requests" in details_str:
+        details = error_data.get("details", [])
+        details_str = _json.dumps(details).lower()
+
+        # Explicit per-minute/per-second → definitely NOT daily
+        if "perminute" in details_str or "persecond" in details_str:
+            return False
+
+        # Check structured quotaId for daily limit
+        for detail in details:
+            for violation in detail.get("violations", []):
+                quota_id = violation.get("quotaId", "").lower()
+                if "perday" in quota_id:
+                    return True
+
+        # Legacy: free_tier_requests metric or perday in raw details
+        if "free_tier_requests" in details_str or "perday" in details_str:
             return True
-        if ("day" in msg or "daily" in msg or "free_tier_requests" in msg or "quota exceeded" in msg) and "minute" not in msg and "second" not in msg:
-            return True
+
     except Exception:
         pass
+
+    # Fallback: raw text scan (only if no structured data parsed)
     try:
         text_lower = resp.text.lower()
+        # If per-minute appears, not daily
+        if "perminute" in text_lower or "per_minute" in text_lower:
+            return False
         if "free_tier_requests" in text_lower or "perday" in text_lower:
             return True
-        if ("daily limit" in text_lower or "queries per day" in text_lower) and "minute" not in text_lower and "second" not in text_lower:
+        # Only match "daily" if explicitly said (NOT "quota exceeded" which is generic!)
+        if ("daily limit" in text_lower or "queries per day" in text_lower):
             return True
     except Exception:
         pass
@@ -226,8 +254,21 @@ def _post_with_rotation(
                     return resp
                     
                 if resp.status_code == 429:
+                    # Log the actual quota violation for debugging
+                    try:
+                        _err = resp.json().get("error", {})
+                        _details = _err.get("details", [])
+                        _quota_ids = [
+                            v.get("quotaId", "?")
+                            for d in _details
+                            for v in d.get("violations", [])
+                        ]
+                        print(f"[GeminiClient] 429 on slot {slot}: quotaIds={_quota_ids}, msg={_err.get('message', '?')[:80]}")
+                    except Exception:
+                        print(f"[GeminiClient] 429 on slot {slot}: raw={resp.text[:200]}")
+
                     if _is_daily_quota_exhausted(resp):
-                        print(f"[GeminiClient] Daily quota exhausted on key slot {slot}. Rotating…")
+                        print(f"[GeminiClient] → Classified as DAILY quota (RPD). Disabling key slot {slot} for 24h.")
                         _shared_pool.mark_failed(key, 429, transient=False)
                         _shared_pool._idx += 1
                         break  # Break inner loop to rotate key
