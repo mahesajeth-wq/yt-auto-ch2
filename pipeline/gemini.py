@@ -289,24 +289,33 @@ class GeminiClient:
         if self._pinned:
             url = url_tmpl.format(key=self._pinned)
             for attempt in range(5):
-                resp = requests.post(
-                    url, json=payload, timeout=timeout,
-                    headers={"Content-Type": "application/json"},
-                )
-                if resp.status_code == 429:
-                    wait = (attempt + 1) * 10
-                    print(f"[GeminiClient][pinned] 429. Waiting {wait}s…")
-                    time.sleep(wait)
-                    continue
-                if resp.status_code in (500, 502, 503, 504):
-                    wait = (attempt + 1) * 5
-                    print(f"[GeminiClient][pinned] {resp.status_code}. Waiting {wait}s…")
-                    time.sleep(wait)
-                    continue
-                resp.raise_for_status()
-                return resp
-            raise RuntimeError("Pinned key is rate-limited or failed after 5 retries.")
+                try:
+                    resp = requests.post(
+                        url, json=payload, timeout=timeout,
+                        headers={"Content-Type": "application/json"},
+                    )
+                    if resp.status_code == 429:
+                        if _is_daily_quota_exhausted(resp):
+                            print("[GeminiClient][pinned] Pinned key daily quota exhausted! Falling back to shared pool.")
+                            break
+                        wait = (attempt + 1) * 10
+                        print(f"[GeminiClient][pinned] 429. Waiting {wait}s…")
+                        time.sleep(wait)
+                        continue
+                    if resp.status_code in (500, 502, 503, 504):
+                        wait = (attempt + 1) * 5
+                        print(f"[GeminiClient][pinned] {resp.status_code}. Waiting {wait}s…")
+                        time.sleep(wait)
+                        continue
+                    resp.raise_for_status()
+                    return resp
+                except Exception as e:
+                    print(f"[GeminiClient][pinned] Attempt {attempt+1} failed: {e}")
+                    if attempt == 4:
+                        break
+            print("[GeminiClient][pinned] Pinned key failed. Falling back to rotating pool.")
         return _post_with_rotation(url_tmpl, payload, timeout, quick)
+
 
     # ── Text generation ──────────────────────────────────────────────────────
 
