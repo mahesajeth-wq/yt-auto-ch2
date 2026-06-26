@@ -119,6 +119,10 @@ jobs:
         run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
-          git add published_topics.json voice_state.json gemini_state.json thumbnail_state.json cache_music/ || true
+          git add published_topics.json 2>/dev/null || true
+          git add voice_state.json 2>/dev/null || true
+          git add gemini_state.json 2>/dev/null || true
+          git add thumbnail_state.json 2>/dev/null || true
+          git add cache_music/ 2>/dev/null || true
           git diff --staged --quiet || git commit -m "chore: update pipeline state [skip ci]"
           git push || true

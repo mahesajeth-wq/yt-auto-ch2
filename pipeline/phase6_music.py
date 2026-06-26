@@ -80,10 +80,35 @@ def _fetch_freesound_music(topic: str, duration_seconds: int) -> str | None:
         return None
 
     search_url = "https://freesound.org/apiv2/search/text/"
+    
+    is_history, is_engineering, is_natural = False, False, False
+    try:
+        from pipeline.config import HISTORY_SUBCLUSTERS
+        is_history = True
+    except ImportError:
+        pass
+    try:
+        from pipeline.config import ENGINEERING_SUBCLUSTERS
+        is_engineering = True
+    except ImportError:
+        pass
+    try:
+        from pipeline.config import NATURAL_WORLD_SUBCLUSTERS
+        is_natural = True
+    except ImportError:
+        pass
+
     if "wedding" in topic.lower() or "marriage" in topic.lower() or "romantic" in topic.lower():
         queries = [f"{topic} ambient", "romantic wedding ambient", "indian wedding instrumental"]
+    elif is_history:
+        queries = [f"{topic} orchestral tension", "cinematic historical music", "medieval tension ambient", "ancient history ambient"]
+    elif is_engineering:
+        queries = [f"{topic} industrial tech", "machinery industrial ambient", "cinematic suspense synth", "ambient tech synth"]
+    elif is_natural:
+        queries = [f"{topic} nature ambient", "wildlife cinematic music", "calm flute ambient", "earth atmospheric loop"]
     else:
-        queries = [f"{topic} cinematic synth", "cinematic suspense synth", "sci-fi tension loop"]
+        queries = [f"{topic} space cinematic", "cinematic suspense synth", "sci-fi tension loop", "ambient space synth"]
+
 
 
     for query in queries:

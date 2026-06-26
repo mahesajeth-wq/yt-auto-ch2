@@ -25,33 +25,37 @@ def clean_thumbnail_text(text: str) -> str:
 
 def _build_filter(layout: str, cleaned_text: str) -> str:
     """Return an FFmpeg -vf filter string for the given layout."""
+    import random
+    text_color = random.choice(["#FFDD00", "#FF2D55", "#00C7FC", "#FFFFFF", "#FF9500"])
+    shadow = "shadowcolor=black@0.55:shadowx=6:shadowy=6"
+    
     if layout == "dark_top_bar":
         return (
             "scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720,"
-            f"drawbox=x=0:y=0:w=iw:h=180:color=black@0.80:t=fill,"
-            f"drawtext=text='{cleaned_text}':font='Bebas Neue':fontsize=100:"
-            "fontcolor=yellow:borderw=7:bordercolor=black:x=(w-text_w)/2:y=60"
+            f"drawbox=x=0:y=0:w=iw:h=190:color=black@0.75:t=fill,"
+            f"drawtext=text='{cleaned_text}':font='Bebas Neue':fontsize=105:"
+            f"fontcolor='{text_color}':borderw=6:bordercolor=black:{shadow}:x=(w-text_w)/2:y=65"
         )
     elif layout == "centered_gradient":
         return (
             "scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720,"
-            "drawbox=x=0:y=220:w=iw:h=280:color=black@0.60:t=fill,"
-            f"drawtext=text='{cleaned_text}':font='Bebas Neue':fontsize=110:"
-            "fontcolor=white:borderw=9:bordercolor=black:x=(w-text_w)/2:y=(h-text_h)/2"
+            f"drawbox=x=0:y=210:w=iw:h=300:color=black@0.65:t=fill,"
+            f"drawtext=text='{cleaned_text}':font='Bebas Neue':fontsize=115:"
+            f"fontcolor='{text_color}':borderw=8:bordercolor=black:{shadow}:x=(w-text_w)/2:y=(h-text_h)/2"
         )
     elif layout == "bottom_third":
         return (
             "scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720,"
-            "drawbox=x=0:y=500:w=iw:h=220:color=black@0.75:t=fill,"
-            f"drawtext=text='{cleaned_text}':font='Bebas Neue':fontsize=95:"
-            "fontcolor=yellow:borderw=7:bordercolor=black:x=(w-text_w)/2:y=535"
+            f"drawbox=x=0:y=490:w=iw:h=230:color=black@0.80:t=fill,"
+            f"drawtext=text='{cleaned_text}':font='Bebas Neue':fontsize=100:"
+            f"fontcolor='{text_color}':borderw=6:bordercolor=black:{shadow}:x=(w-text_w)/2:y=535"
         )
     else:  # split_left
         return (
             "scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720,"
-            "drawbox=x=0:y=0:w=540:h=ih:color=black@0.80:t=fill,"
-            f"drawtext=text='{cleaned_text}':font='Bebas Neue':fontsize=85:"
-            "fontcolor=yellow:borderw=6:bordercolor=black:x=30:y=(h-text_h)/2"
+            f"drawbox=x=0:y=0:w=560:h=ih:color=black@0.75:t=fill,"
+            f"drawtext=text='{cleaned_text}':font='Bebas Neue':fontsize=90:"
+            f"fontcolor='{text_color}':borderw=5:bordercolor=black:{shadow}:x=40:y=(h-text_h)/2"
         )
 
 def generate_thumbnail(final_video_path: str, thumbnail_text: str) -> str:

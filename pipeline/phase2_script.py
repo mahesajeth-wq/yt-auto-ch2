@@ -42,6 +42,8 @@ Use the following hook concept as your core theme: "{hook_formatted}" (short hoo
 
 Narration Style Requirements:
 1. Pacing & Punchiness: Every single sentence must be extremely short, sharp, and high-impact (5 to 10 words MAXIMUM per segment's narration). Avoid long clauses or passive language.
+2. Conversational & Simple Language: Use very simple, easy-to-understand, and highly relatable words that anyone can easily follow. Avoid obscure, complex, or overly difficult English vocabulary. Keep the narration friendly, extremely engaging, and relatable—like a friend explaining an amazing fact.
+3. Engaging Tone: The voiceover narration must be conversational, highly engaging, and relatable—like a friend telling an exciting story. Write the voiceover to be energetic, warm, and inviting.
 2. Hook/Pattern Interrupt: Segment 1 must immediately shatter the viewer's attention. DO NOT use introductory filler like "Did you know..." or "Have you ever wondered...". Go straight to a shocking or mind-bending statement that creates an massive information gap in under 8 words.
 3. Emotional/Sensory Triggers: Use strong, dramatic verbs and adjectives (e.g., "panicking", "shatters", "banned", "impossible", "melts", "secret", "trapped").
 4. No Fluff: Get straight to the mind-blowing science. Every word must justify its existence.
@@ -116,6 +118,10 @@ For the final segment (Segment {segment_count}) specifically:
     else:  # long-form
         prompt = f"""Generate a comprehensive 7-10 minute YouTube educational script on the topic: "{topic['topic']}".
 The script must have 15 to 18 segments, each targeting 25-35 seconds of narration.
+
+Narration Style Requirements:
+1. Conversational & Simple Language: Use very simple, easy-to-understand, and highly relatable words that anyone can easily follow. Avoid obscure, complex, or overly difficult English vocabulary. Keep the narration friendly, extremely engaging, and relatable—like a friend explaining an amazing topic.
+2. Engaging Tone: The voiceover narration must be conversational, highly engaging, and relatable—like a friend telling an exciting story. Write the voiceover to be energetic, warm, and inviting.
 Structure the narrative into:
 - Intro hook (segments 1-2)
 - Act 1: The core mystery/mechanism (segments 3-7)

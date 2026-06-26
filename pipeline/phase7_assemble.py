@@ -74,7 +74,7 @@ def assemble_video(broll_files: list[str], tts_files: list[str], captions_ass: s
     for d in durations[:-1]:   # all boundaries except the last (end of video)
         cumulative += d
         boundary_times.append(cumulative)
-    sfx_track_path = create_sfx_track(boundary_times, total_tts_duration)
+    sfx_track_path = create_sfx_track(boundary_times, total_tts_duration, topic=script.get("topic", ""))
 
     # Step 4: Add karaoke captions to video
     print("Step 4: Adding captions...")
@@ -87,16 +87,18 @@ def assemble_video(broll_files: list[str], tts_files: list[str], captions_ass: s
     ]
     subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-    # Step 5: Adding premium hook overlays (Shorts only)
-    print("Step 5: Adding premium hook overlays...")
+    # Step 5: Adding premium hook overlays and transitions
+    print("Step 5: Adding premium hook overlays and transitions...")
     assembled_flashed_path = "output/assembled_flashed.mp4"
     if format_type == "short":
         clean_title = "".join(c for c in script.get("title", "").upper() if c.isalnum() or c.isspace()).strip()
         
         filters = []
-        # 1. Pattern interrupt flashes at the start of each segment (0.15s transparent white overlay)
-        for t_start in [0.0] + boundary_times:
-            filters.append(f"drawbox=y=0:color=white@0.3:t=fill:enable='between(t,{t_start:.3f},{t_start+0.15:.3f})'")
+        # 1. Pattern interrupt flashes at the start of each segment (0.15s transparent white/black/color overlay)
+        overlay_colors = ["white@0.3", "black@0.45", "yellow@0.15", "orange@0.2"]
+        for idx, t_start in enumerate([0.0] + boundary_times):
+            color = overlay_colors[idx % len(overlay_colors)]
+            filters.append(f"drawbox=y=0:color={color}:t=fill:enable='between(t,{t_start:.3f},{t_start+0.15:.3f})'")
             
         # 2. Big title hook card (first 1.5s) - Yellow font with premium box padding
         filters.append(f"drawtext=text='{clean_title}':fontsize=80:fontcolor=yellow:font='Bebas Neue':"
@@ -121,7 +123,21 @@ def assemble_video(broll_files: list[str], tts_files: list[str], captions_ass: s
         ]
         subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     else:
-        shutil.copy(assembled_capped_path, assembled_flashed_path)
+        # For long form, apply subtle black dip transitions at boundaries (0.25s)
+        filters = []
+        for t_start in boundary_times:
+            filters.append(f"drawbox=y=0:color=black@0.7:t=fill:enable='between(t,{t_start-0.125:.3f},{t_start+0.125:.3f})'")
+        
+        if filters:
+            cmd = [
+                "ffmpeg", "-y", "-i", assembled_capped_path,
+                "-vf", ",".join(filters),
+                "-c:v", "libx264", "-preset", "superfast", "-crf", "18", "-pix_fmt", "yuv420p",
+                assembled_flashed_path
+            ]
+            subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        else:
+            shutil.copy(assembled_capped_path, assembled_flashed_path)
 
     # Step 6: Final mix: video + TTS + music + SFX
     print("Step 6: Final audio mix with SFX…")
