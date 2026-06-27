@@ -61,6 +61,21 @@ class TTSError(Exception):
 
 STATE_FILE = "gemini_state.json"
 
+def _get_next_daily_reset_time() -> float:
+    """Calculate the epoch timestamp for the next Google Gemini daily quota reset.
+
+    Google's daily free-tier quota resets at Midnight Pacific Time.
+    Pacific Time is UTC-8 (or UTC-7 during DST). We use a conservative
+    08:00 UTC (12:00 AM PST) as the daily boundary.
+    """
+    import datetime
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    target = now_utc.replace(hour=8, minute=0, second=0, microsecond=0)
+    if now_utc >= target:
+        target += datetime.timedelta(days=1)
+    return target.timestamp()
+
+
 class _KeyPool:
     """Smart Gemini API key pool with cooldowns and git-persisted state."""
 
@@ -72,6 +87,7 @@ class _KeyPool:
         self._keys = keys
         self._cooldowns = [0.0] * len(keys)
         self._failures = [0] * len(keys)
+        self._statuses = ["active"] * len(keys)  # "active", "daily_exhausted", "disabled"
         self._idx = 0
         self._load_state()
 
@@ -85,10 +101,13 @@ class _KeyPool:
                 for idx_str, info in state.items():
                     idx = int(idx_str)
                     if 0 <= idx < len(self._keys):
+                        status = info.get("status", "active")
+                        self._statuses[idx] = status
+                        self._failures[idx] = info.get("failures", 0)
+                        
                         cd_until = info.get("cooldown_until", 0.0)
                         if cd_until > now:
                             self._cooldowns[idx] = cd_until
-                        self._failures[idx] = info.get("failures", 0)
             except Exception as e:
                 print(f"Warning: Failed to load key pool state: {e}")
 
@@ -98,7 +117,8 @@ class _KeyPool:
         for idx in range(len(self._keys)):
             state[str(idx)] = {
                 "cooldown_until": self._cooldowns[idx],
-                "failures": self._failures[idx]
+                "failures": self._failures[idx],
+                "status": self._statuses[idx]
             }
         try:
             with open(STATE_FILE, "w") as f:
@@ -122,11 +142,23 @@ class _KeyPool:
         
         now = time.time()
         if not transient:
-            # Permanent daily quota exhaustion or key invalidation
-            self._failures[idx] = max(4, self._failures[idx] + 1)
-            cooldown_duration = 86400.0  # 24 hours
+            if status_code in (400, 403):
+                # Permanent credential or project denied error. Block for 10 years.
+                self._failures[idx] = max(4, self._failures[idx] + 1)
+                self._statuses[idx] = "disabled"
+                cooldown_duration = 315360000.0  # 10 years
+                self._cooldowns[idx] = now + cooldown_duration
+            else:
+                # Permanent daily quota exhaustion (429).
+                # Reset automatically at Midnight PT (08:00 UTC).
+                self._failures[idx] = max(4, self._failures[idx] + 1)
+                self._statuses[idx] = "daily_exhausted"
+                reset_time = _get_next_daily_reset_time()
+                cooldown_duration = reset_time - now
+                self._cooldowns[idx] = reset_time
         else:
             # Transient rate limit (RPM/TPM) or server error
+            self._statuses[idx] = "active"
             if status_code in (500, 502, 503, 504):
                 cooldown_duration = 10.0  # 10s for temporary server errors
             else:
@@ -135,19 +167,22 @@ class _KeyPool:
             # Reset failure count if it was high, as this is transient
             if self._failures[idx] >= 3:
                 self._failures[idx] = 1
+            self._cooldowns[idx] = now + cooldown_duration
 
-        self._cooldowns[idx] = now + cooldown_duration
         slot = idx + 1
-        print(f"[KeyPool] Key slot {slot}/{len(self._keys)} marked failed (status {status_code}, transient={transient}). Cooldown for {cooldown_duration:.0f}s (Until: {time.strftime('%H:%M:%S', time.localtime(self._cooldowns[idx]))})")
+        print(f"[KeyPool] Key slot {slot}/{len(self._keys)} marked failed (status {status_code}, status_label={self._statuses[idx]}, transient={transient}). Cooldown for {cooldown_duration:.0f}s (Until: {time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime(self._cooldowns[idx]))})")
         self._save_state()
 
     def mark_success(self, key: str):
         if key not in self._keys:
             return
         idx = self._keys.index(key)
-        if self._failures[idx] != 0:
-            self._failures[idx] = 0
-            self._save_state()
+        # Success should clear failures only if the key is not permanently disabled
+        if self._statuses[idx] != "disabled":
+            self._statuses[idx] = "active"
+            if self._failures[idx] != 0:
+                self._failures[idx] = 0
+                self._save_state()
 
     def __len__(self) -> int:
         return len(self._keys)
