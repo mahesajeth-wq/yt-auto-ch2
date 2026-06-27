@@ -110,4 +110,4 @@ def validate_config():
 
 
 # ── Social / Beacons Link ───────────────────────────────────────────────────
-BEACONS_LINK = os.environ.get("BEACONS_LINK", "https://beacons.ai/mysterydemysters")
+BEACONS_LINK = os.environ.get("BEACONS_LINK", "https://beacons.ai/naturenourisher1")
