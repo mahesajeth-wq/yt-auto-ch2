@@ -5,7 +5,7 @@ import wave
 import urllib.parse
 import requests
 from pipeline.config import (
-    GEMINI_API_KEYS, GEMINI_FLASH, GEMINI_TTS_MODEL, GEMINI_API_BASE
+    GEMINI_API_KEYS, GEMINI_FLASH, GEMINI_PRO, GEMINI_TTS_MODEL, GEMINI_API_BASE
 )
 
 import re as _re
@@ -422,13 +422,14 @@ class GeminiClient:
         use_grounding: bool = False,
         temperature: float = 0.8,
         max_tokens: int = 8192,
+        model: str = None
     ) -> str:
-        url = f"{GEMINI_API_BASE}/models/{GEMINI_FLASH}:generateContent?key={{key}}"
+        model_name = model or GEMINI_PRO
+        url = f"{GEMINI_API_BASE}/models/{model_name}:generateContent?key={{key}}"
         gen_config: dict = {
             "temperature": temperature,
             "maxOutputTokens": max_tokens,
         }
-        # JSON mode is incompatible with google_search grounding tool
         if not use_grounding:
             gen_config["responseMimeType"] = "application/json"
         payload: dict = {
@@ -438,9 +439,19 @@ class GeminiClient:
         if use_grounding:
             payload["tools"] = [{"google_search": {}}]
 
-        resp = self._post(url, payload)
-        text = resp.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
-        return _clean_json_output(text)
+        try:
+            resp = self._post(url, payload)
+            text = resp.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
+            return _clean_json_output(text)
+        except Exception as exc:
+            # Fallback if primary model (like pro) fails
+            if model_name != GEMINI_FLASH:
+                print(f"[GeminiClient] Primary model {model_name} failed: {exc}. Falling back to {GEMINI_FLASH}...")
+                fallback_url = f"{GEMINI_API_BASE}/models/{GEMINI_FLASH}:generateContent?key={{key}}"
+                resp = self._post(fallback_url, payload)
+                text = resp.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
+                return _clean_json_output(text)
+            raise exc
 
     # ── Image generation (Pollinations – no key needed) ──────────────────────
 
