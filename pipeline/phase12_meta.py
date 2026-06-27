@@ -71,6 +71,7 @@ def _fb_upload_reel(video_path: str, description: str, page_id: str, page_token:
             "upload_phase": "finish",
             "video_id": video_id,
             "description": description[:2000],
+            "published": "true",
             "access_token": page_token,
         },
         timeout=30,
