@@ -74,6 +74,7 @@ For abstract science concepts: use the most recognizable visual symbol.
 You MUST return your response ONLY as a raw JSON object with no markdown syntax. The JSON structure MUST be exactly like this:
 {{
   "title": "A catchy title under 40 chars, starting with a hook word/number and containing one emoji",
+  "voiceover_plan": "A 2-3 sentence internal plan detailing the emotional arc of the voiceover. How should the narrator sound? Think step-by-step to plan the performance before writing.",
   "vocal_tone": "Select the single best vocal delivery style for this topic from: 'dramatic_whisper', 'suspenseful_mystery', 'energetic_storytelling', 'deep_curiosity'",
   "description": "Line1: restate the hook\nLine2: Fast. Accurate. Mind-blowing.\nLine3: 📲 Follow our socials & links -> {BEACONS_LINK}\n\n#science #didyouknow #facts",
   "tags": ["8 to 12 relevant tags under 500 characters total"],
@@ -94,9 +95,15 @@ You MUST return your response ONLY as a raw JSON object with no markdown syntax.
       "duration_target": 6
     }},
     {{
+      "id": {segment_count - 1},
+      "narration": "A witty, sarcastic, or compelling Call-to-Action nudging viewers to check the link in the bio/description. MUST match the exact emotional mood of the video.",
+      "broll_query": "typing on smartphone close up",
+      "duration_target": 4
+    }},
+    {{
       "id": {segment_count},
-      "narration": "Final sentence that GRAMMATICALLY FLOWS INTO Segment 1's first sentence when read back-to-back — creating an audio loop the viewer doesn't register as a restart. Example pattern: if Segment 1 opens with 'A pistol shrimp creates a flash hotter than the sun', Segment {segment_count} should end with something like '...which is why nothing in the ocean is stranger than what you heard at the start — hotter than the sun.' The viewer loops before realising the video restarted. Also include a witty, sarcastic or compelling Call-to-Action relevant to the subject (e.g., 'Want to know more or buy a rocket? Link in bio!').",
-      "broll_query": "nature extreme close-up slow motion",
+      "narration": "Final sentence that GRAMMATICALLY FLOWS INTO Segment 1's first sentence when read back-to-back — creating an audio loop the viewer doesn't register as a restart. Loop seamlessly.",
+      "broll_query": "abstract visual loop continuous",
       "duration_target": 6
     }}
   ],
@@ -112,9 +119,12 @@ For Segments 2 to (n-2):
 - Deliver the single most mind-bending scientific fact in Segment 2.
 - Introduce an open loop (a second mystery or surprise fact) in Segment 3 that builds tension towards the loop twist.
 
+For Segment {segment_count - 1} specifically:
+- MUST be a 1-sentence Call-to-Action that matches the video's emotional tone and drives viewers to check the link in description/bio. Make it witty, sarcastic, or compelling — NOT generic.
+
 For the final segment (Segment {segment_count}) specifically:
 - Resolve all loops and design the final sentence to end on a transition that flows seamlessly back into Segment 1's hook narration.
-- The final sentence should THEMATICALLY echo or re-contextualize the IDEA from Segment 1's hook — e.g. answer the question it posed, or reveal a twist that recasts it — WITHOUT repeating its exact wording. The goal is a satisfying "full circle" feeling on rewatch, not a verbatim repeat.
+- The final sentence should THEMATICALLY echo or re-contextualize the IDEA from Segment 1's hook.
 """
     else:  # long-form
         prompt = f"""Generate a comprehensive 7-10 minute YouTube educational script on the topic: "{topic['topic']}".
@@ -156,6 +166,7 @@ For abstract science concepts: use the most recognizable visual symbol.
 You MUST return your response ONLY as a raw JSON object with no markdown syntax. The JSON structure MUST be exactly like this:
 {{
   "title": "Engaging educational title for a long video, under 70 characters",
+  "voiceover_plan": "A 2-3 sentence internal plan detailing the emotional arc of the voiceover. How should the narrator sound? Think step-by-step to plan the performance before writing.",
   "description": "A detailed, engaging description explaining what the video covers, including timestamps and educational value.\\n\\n#science #education #technology",
   "tags": ["15 to 20 relevant tags"],
   "category_id": "27",
