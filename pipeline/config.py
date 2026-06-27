@@ -107,3 +107,7 @@ def validate_config():
         print("[Config] Klipy API: enabled (GIF/meme B-roll tier active).")
     if FREESOUND_API_KEY:
         print("[Config] Freesound API: enabled (CC0 ambient music tier active).")
+
+
+# ── Social / Beacons Link ───────────────────────────────────────────────────
+BEACONS_LINK = os.environ.get("BEACONS_LINK", "https://beacons.ai/mysterydemysters")

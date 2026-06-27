@@ -461,12 +461,21 @@ class GeminiClient:
 
     # ── TTS ──────────────────────────────────────────────────────────────────
 
-    def generate_tts(self, text: str, voice: str = "Aoede") -> tuple[bytes, str]:
+    def generate_tts(self, text: str, voice: str = "Aoede", vocal_tone: str = None) -> tuple[bytes, str]:
         """Returns (audio_bytes, mime_type). Raises TTSError on failure."""
         url = f"{GEMINI_API_BASE}/models/{GEMINI_TTS_MODEL}:generateContent?key={{key}}"
+        
+        tone_prompts = {
+            "dramatic_whisper": "Say this in an intimate, dramatic, atmospheric whisper with clear pronunciation",
+            "suspenseful_mystery": "Say this with intense suspense, intrigue, and dramatic pauses",
+            "energetic_storytelling": "Say this with high energy, enthusiasm, and a warm storytelling tone",
+            "deep_curiosity": "Say this with deep curiosity, awe, and fascination",
+        }
+        prefix = tone_prompts.get(vocal_tone, "Say this clearly with natural pacing")
+        
         payload = {
             "contents": [{"role": "user", "parts": [
-                {"text": f"Say this clearly with natural pacing: {text}"}
+                {"text": f"{prefix}: {text}"}
             ]}],
             "generationConfig": {
                 "responseModalities": ["AUDIO"],

@@ -1,7 +1,7 @@
 import json
 import datetime
 import random
-from pipeline.config import HOOK_PATTERNS
+from pipeline.config import HOOK_PATTERNS, BEACONS_LINK
 from pipeline.gemini import GeminiClient, _robust_json_loads
 
 def get_next_tuesday_3pm_ist_utc():
@@ -74,7 +74,8 @@ For abstract science concepts: use the most recognizable visual symbol.
 You MUST return your response ONLY as a raw JSON object with no markdown syntax. The JSON structure MUST be exactly like this:
 {{
   "title": "A catchy title under 40 chars, starting with a hook word/number and containing one emoji",
-  "description": "Line1: restate the hook\nLine2: Fast. Accurate. Mind-blowing.\nLine3: Full breakdown -> [link]\n\n#science #didyouknow #facts",
+  "vocal_tone": "Select the single best vocal delivery style for this topic from: 'dramatic_whisper', 'suspenseful_mystery', 'energetic_storytelling', 'deep_curiosity'",
+  "description": f"Line1: restate the hook\nLine2: Fast. Accurate. Mind-blowing.\nLine3: 📲 Follow our socials & links -> {BEACONS_LINK}\n\n#science #didyouknow #facts",
   "tags": ["8 to 12 relevant tags under 500 characters total"],
   "category_id": "27",
   "segments": [
@@ -94,7 +95,7 @@ You MUST return your response ONLY as a raw JSON object with no markdown syntax.
     }},
     {{
       "id": {segment_count},
-      "narration": "Final sentence that GRAMMATICALLY FLOWS INTO Segment 1's first sentence when read back-to-back — creating an audio loop the viewer doesn't register as a restart. Example pattern: if Segment 1 opens with 'A pistol shrimp creates a flash hotter than the sun', Segment {segment_count} should end with something like '...which is why nothing in the ocean is stranger than what you heard at the start — hotter than the sun.' The viewer loops before realising the video restarted.",
+      "narration": "Final sentence that GRAMMATICALLY FLOWS INTO Segment 1's first sentence when read back-to-back — creating an audio loop the viewer doesn't register as a restart. Example pattern: if Segment 1 opens with 'A pistol shrimp creates a flash hotter than the sun', Segment {segment_count} should end with something like '...which is why nothing in the ocean is stranger than what you heard at the start — hotter than the sun.' The viewer loops before realising the video restarted. Also include a witty, sarcastic or compelling Call-to-Action relevant to the subject (e.g., 'Want to know more or buy a rocket? Link in bio!').",
       "broll_query": "nature extreme close-up slow motion",
       "duration_target": 6
     }}
@@ -234,5 +235,22 @@ Return ONLY a raw JSON object for this segment with the updated "narration" and 
             except Exception as e:
                 print(f"Failed to regenerate segment {seg['id']} ({e}). Keeping original for Judge AI review.")
                 seg["verified"] = True
+
+    
+    # ── Ensure Beacons Link in Description ────────────────────────────────────
+    from pipeline.config import BEACONS_LINK
+    if "description" in script:
+        desc = script["description"]
+        if "[link]" in desc:
+            desc = desc.replace("[link]", BEACONS_LINK)
+        if BEACONS_LINK not in desc:
+            desc += f"\n\n📲 Follow our socials & links: {BEACONS_LINK}"
+        script["description"] = desc
+
+    # ── Ensure Vocal Tone Variety ─────────────────────────────────────────────
+    if "vocal_tone" not in script or not script["vocal_tone"]:
+        import random as _rnd
+        vocal_tones = ["dramatic_whisper", "suspenseful_mystery", "energetic_storytelling", "deep_curiosity"]
+        script["vocal_tone"] = _rnd.choice(vocal_tones)
 
     return script

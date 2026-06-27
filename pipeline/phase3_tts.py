@@ -58,8 +58,9 @@ def generate_audio(script: dict) -> list[str]:
             continue
 
         try:
+            vocal_tone = script.get("vocal_tone")
             audio_bytes, mime_type = gemini_client.generate_tts(
-                seg["narration"], voice=gemini_voice
+                seg["narration"], voice=gemini_voice, vocal_tone=vocal_tone
             )
             if audio_bytes.startswith(b"RIFF") or "wav" in mime_type.lower():
                 with open(out_path, "wb") as wf:
