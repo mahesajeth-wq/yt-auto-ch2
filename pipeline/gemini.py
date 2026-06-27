@@ -424,7 +424,8 @@ class GeminiClient:
         max_tokens: int = 8192,
         model: str = None
     ) -> str:
-        model_name = model or GEMINI_PRO
+        # Default to Flash for everything. Only script generation passes model=GEMINI_PRO.
+        model_name = model or GEMINI_FLASH
         url = f"{GEMINI_API_BASE}/models/{model_name}:generateContent?key={{key}}"
         gen_config: dict = {
             "temperature": temperature,
@@ -439,19 +440,29 @@ class GeminiClient:
         if use_grounding:
             payload["tools"] = [{"google_search": {}}]
 
-        try:
-            resp = self._post(url, payload)
-            text = resp.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
-            return _clean_json_output(text)
-        except Exception as exc:
-            # Fallback if primary model (like pro) fails
-            if model_name != GEMINI_FLASH:
-                print(f"[GeminiClient] Primary model {model_name} failed: {exc}. Falling back to {GEMINI_FLASH}...")
-                fallback_url = f"{GEMINI_API_BASE}/models/{GEMINI_FLASH}:generateContent?key={{key}}"
-                resp = self._post(fallback_url, payload)
-                text = resp.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
-                return _clean_json_output(text)
-            raise exc
+        # If using Pro, try ONE key only — don't burn all keys on Pro's 5 RPD limit
+        if model_name != GEMINI_FLASH:
+            key = self.get_available_key()
+            if key:
+                try:
+                    single_url = url.replace("{key}", key)
+                    resp = requests.post(single_url, json=payload, timeout=120)
+                    if resp.status_code == 200:
+                        text = resp.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
+                        print(f"[GeminiClient] ✅ {model_name} succeeded on first attempt.")
+                        return _clean_json_output(text)
+                    else:
+                        print(f"[GeminiClient] {model_name} returned {resp.status_code}. Falling back to {GEMINI_FLASH}...")
+                except Exception as exc:
+                    print(f"[GeminiClient] {model_name} failed: {exc}. Falling back to {GEMINI_FLASH}...")
+            else:
+                print(f"[GeminiClient] No keys available for {model_name}. Falling back to {GEMINI_FLASH}...")
+            # Fall through to Flash
+            url = f"{GEMINI_API_BASE}/models/{GEMINI_FLASH}:generateContent?key={{key}}"
+
+        resp = self._post(url, payload)
+        text = resp.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
+        return _clean_json_output(text)
 
     # ── Image generation (Pollinations – no key needed) ──────────────────────
 

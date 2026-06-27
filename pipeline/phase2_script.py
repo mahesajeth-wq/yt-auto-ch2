@@ -1,7 +1,7 @@
 import json
 import datetime
 import random
-from pipeline.config import HOOK_PATTERNS, BEACONS_LINK
+from pipeline.config import HOOK_PATTERNS, BEACONS_LINK, GEMINI_PRO
 from pipeline.gemini import GeminiClient, _robust_json_loads
 
 def get_next_tuesday_3pm_ist_utc():
@@ -191,7 +191,7 @@ You MUST return your response ONLY as a raw JSON object with no markdown syntax.
     script = None
     for attempt in range(max_attempts):
         try:
-            script_text = client.generate_text(prompt, use_grounding=False, temperature=0.8)
+            script_text = client.generate_text(prompt, use_grounding=False, temperature=0.8, model=GEMINI_PRO)
             script = _robust_json_loads(script_text)
             break
         except Exception as e:
