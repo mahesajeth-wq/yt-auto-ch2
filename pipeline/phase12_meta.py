@@ -87,14 +87,36 @@ def _fb_upload_reel(video_path: str, description: str, page_id: str, page_token:
 # ── Instagram Reel Upload ────────────────────────────────────────────────────
 
 def _get_public_video_url(video_path: str) -> str | None:
-    """Upload video to file.io to get a temporary public URL for IG API.
-
-    file.io provides single-download links. The IG API will download it once,
-    which is exactly what we need.
+    """Upload video to get a temporary public URL for IG API.
+    
+    Tries tmpfiles.org first (free, fast, no limits), then falls back to file.io.
     """
     file_size_mb = os.path.getsize(video_path) / (1024 * 1024)
-    print(f"[Meta/IG] Uploading {file_size_mb:.1f}MB to file.io for public URL...")
+    
+    # ── Method 1: tmpfiles.org ────────────────────────────────────────────────
+    print(f"[Meta/IG] Uploading {file_size_mb:.1f}MB to tmpfiles.org for public URL...")
+    try:
+        with open(video_path, "rb") as f:
+            resp = requests.post(
+                "https://tmpfiles.org/api/v1/upload",
+                files={"file": (os.path.basename(video_path), f, "video/mp4")},
+                timeout=600,
+            )
+        if resp.status_code == 200:
+            data = resp.json()
+            if data.get("status") == "success":
+                viewer_url = data.get("data", {}).get("url")
+                if viewer_url and "tmpfiles.org/" in viewer_url:
+                    # Convert to direct download link: https://tmpfiles.org/dl/...
+                    direct_url = viewer_url.replace("tmpfiles.org/", "tmpfiles.org/dl/")
+                    print(f"[Meta/IG] tmpfiles.org URL: {direct_url}")
+                    return direct_url
+        print(f"[Meta/IG] tmpfiles.org failed: {resp.status_code} {resp.text[:200]}")
+    except Exception as e:
+        print(f"[Meta/IG] tmpfiles.org error: {e}")
 
+    # ── Method 2: file.io (Fallback) ──────────────────────────────────────────
+    print(f"[Meta/IG] Falling back: Uploading to file.io...")
     try:
         with open(video_path, "rb") as f:
             resp = requests.post(
@@ -107,11 +129,12 @@ def _get_public_video_url(video_path: str) -> str | None:
             data = resp.json()
             if data.get("success"):
                 url = data.get("link")
-                print(f"[Meta/IG] Public URL: {url}")
+                print(f"[Meta/IG] file.io URL: {url}")
                 return url
-        print(f"[Meta/IG] file.io upload failed: {resp.status_code} {resp.text[:200]}")
+        print(f"[Meta/IG] file.io failed: {resp.status_code} {resp.text[:200]}")
     except Exception as e:
         print(f"[Meta/IG] file.io error: {e}")
+        
     return None
 
 
