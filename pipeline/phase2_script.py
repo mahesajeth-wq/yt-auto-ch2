@@ -75,7 +75,7 @@ You MUST return your response ONLY as a raw JSON object with no markdown syntax.
 {{
   "title": "A catchy title under 40 chars, starting with a hook word/number and containing one emoji",
   "vocal_tone": "Select the single best vocal delivery style for this topic from: 'dramatic_whisper', 'suspenseful_mystery', 'energetic_storytelling', 'deep_curiosity'",
-  "description": f"Line1: restate the hook\nLine2: Fast. Accurate. Mind-blowing.\nLine3: 📲 Follow our socials & links -> {BEACONS_LINK}\n\n#science #didyouknow #facts",
+  "description": "Line1: restate the hook\nLine2: Fast. Accurate. Mind-blowing.\nLine3: 📲 Follow our socials & links -> {BEACONS_LINK}\n\n#science #didyouknow #facts",
   "tags": ["8 to 12 relevant tags under 500 characters total"],
   "category_id": "27",
   "segments": [
@@ -238,7 +238,6 @@ Return ONLY a raw JSON object for this segment with the updated "narration" and 
 
     
     # ── Ensure Beacons Link in Description ────────────────────────────────────
-    from pipeline.config import BEACONS_LINK
     if "description" in script:
         desc = script["description"]
         if "[link]" in desc:
