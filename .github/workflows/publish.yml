@@ -71,6 +71,9 @@ jobs:
           DM_PASSWORD:      ${{ secrets.DM_PASSWORD }}
           RUMBLE_EMAIL:      ${{ secrets.RUMBLE_EMAIL }}
           RUMBLE_PASSWORD:   ${{ secrets.RUMBLE_PASSWORD }}
+          FB_PAGE_ID:        ${{ secrets.FB_PAGE_ID }}
+          FB_PAGE_TOKEN:     ${{ secrets.FB_PAGE_TOKEN }}
+          IG_USER_ID:        ${{ secrets.IG_USER_ID }}
           YT_CLIENT_ID:     ${{ secrets.YT_CLIENT_ID }}
           YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
           YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}

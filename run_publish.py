@@ -121,6 +121,18 @@ def main():
                 print(f"✅ Successfully published to Rumble! URL: {rumble_url}")
         except Exception as rb_err:
             print(f"⚠️ Warning: Rumble upload encountered an error: {rb_err}")
+
+        # --- META (FACEBOOK + INSTAGRAM) UPLOAD ---
+        try:
+            print("\n🚀 Initiating Meta (Facebook + Instagram) upload...")
+            phase12 = importlib.import_module("pipeline.phase12_meta")
+            meta_result = phase12.upload_to_meta(video_path, metadata)
+            if meta_result.get("fb_video_id"):
+                print(f"✅ Facebook Reel published! ID: {meta_result['fb_video_id']}")
+            if meta_result.get("ig_media_id"):
+                print(f"✅ Instagram Reel published! ID: {meta_result['ig_media_id']}")
+        except Exception as meta_err:
+            print(f"⚠️ Warning: Meta upload encountered an error: {meta_err}")
     except google.auth.exceptions.RefreshError as ref_err:
         print("\n❌ Authentication Error: Refresh token may have expired or is invalid.")
         print("Re-generate your refresh token at: https://developers.google.com/oauthplayground")
