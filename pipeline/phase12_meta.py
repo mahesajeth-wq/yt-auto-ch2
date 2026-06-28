@@ -224,6 +224,29 @@ def _ig_upload_reel(video_path: str, caption: str, ig_user_id: str, access_token
     return media_id
 
 
+def _extract_hashtags(metadata: dict) -> str:
+    tags = metadata.get("tags", [])
+    if isinstance(tags, str):
+        tags = [t.strip() for t in tags.split(",") if t.strip()]
+    elif not isinstance(tags, list):
+        tags = []
+    
+    hashtags_list = []
+    for tag in tags:
+        clean_tag = "".join(c for c in tag if c.isalnum())
+        if clean_tag:
+            hashtags_list.append(f"#{clean_tag.lower()}")
+            
+    desc = metadata.get("description", "")
+    for word in desc.split():
+        if word.startswith("#"):
+            clean_h = "#" + "".join(c for c in word if c.isalnum())
+            if clean_h != "#" and clean_h.lower() not in [h.lower() for h in hashtags_list]:
+                hashtags_list.append(clean_h.lower())
+                
+    return " ".join(hashtags_list)
+
+
 # ── Public Interface ─────────────────────────────────────────────────────────
 
 def upload_to_meta(video_path: str, metadata: dict) -> dict:
@@ -236,15 +259,11 @@ def upload_to_meta(video_path: str, metadata: dict) -> dict:
     ig_user_id = os.environ.get("IG_USER_ID", "")
 
     title = metadata.get("title", "")
-    description = metadata.get("description", title)
-    hashtags = metadata.get("hashtags", "")
-    if isinstance(hashtags, list):
-        hashtags = " ".join(hashtags)
+    hashtags = _extract_hashtags(metadata)
 
-    # Build caption for social
-    caption = f"{title}\n\n{description}"
-    if hashtags:
-        caption += f"\n\n{hashtags}"
+    # Snappy social-optimized captions with space dot dividers to hide hashtags overlay
+    fb_caption = f"{title}\n\n📲 Link in bio to learn more!\n\n.\n.\n.\n{hashtags}"
+    ig_caption = f"{title}\n\n📲 Link in bio!\n\n.\n.\n.\n{hashtags}"
 
     result = {"fb_video_id": None, "ig_media_id": None}
 
@@ -252,7 +271,7 @@ def upload_to_meta(video_path: str, metadata: dict) -> dict:
     if fb_page_id and fb_page_token:
         print("\n📘 Uploading to Facebook Page as Reel...")
         try:
-            result["fb_video_id"] = _fb_upload_reel(video_path, caption, fb_page_id, fb_page_token, title=title)
+            result["fb_video_id"] = _fb_upload_reel(video_path, fb_caption, fb_page_id, fb_page_token, title=title)
         except Exception as e:
             print(f"[Meta/FB] Error: {e}")
     else:
@@ -262,7 +281,7 @@ def upload_to_meta(video_path: str, metadata: dict) -> dict:
     if ig_user_id and fb_page_token:
         print("\n📸 Uploading to Instagram as Reel...")
         try:
-            result["ig_media_id"] = _ig_upload_reel(video_path, caption, ig_user_id, fb_page_token)
+            result["ig_media_id"] = _ig_upload_reel(video_path, ig_caption, ig_user_id, fb_page_token)
         except Exception as e:
             print(f"[Meta/IG] Error: {e}")
     else:

@@ -133,6 +133,50 @@ def main():
                 print(f"✅ Instagram Reel published! ID: {meta_result['ig_media_id']}")
         except Exception as meta_err:
             print(f"⚠️ Warning: Meta upload encountered an error: {meta_err}")
+
+        # --- THREADS UPLOAD ---
+        try:
+            print("\n🚀 Initiating Threads upload...")
+            threads_user_id = os.environ.get("THREADS_USER_ID", os.environ.get("IG_USER_ID", ""))
+            threads_token = os.environ.get("THREADS_ACCESS_TOKEN", os.environ.get("FB_PAGE_TOKEN", ""))
+            
+            if threads_user_id and threads_token:
+                phase13 = importlib.import_module("pipeline.phase13_threads")
+                
+                # Build Threads caption
+                title = metadata.get("title", "")
+                hashtags_list = []
+                tags = metadata.get("tags", [])
+                if isinstance(tags, str):
+                    tags = [t.strip() for t in tags.split(",") if t.strip()]
+                elif isinstance(tags, list):
+                    pass
+                else:
+                    tags = []
+                    
+                for tag in tags:
+                    clean_tag = "".join(c for c in tag if c.isalnum())
+                    if clean_tag:
+                        hashtags_list.append(f"#{clean_tag.lower()}")
+                        
+                desc = metadata.get("description", "")
+                for word in desc.split():
+                    if word.startswith("#"):
+                        clean_h = "#" + "".join(c for c in word if c.isalnum())
+                        if clean_h != "#" and clean_h.lower() not in [h.lower() for h in hashtags_list]:
+                            hashtags_list.append(clean_h.lower())
+                            
+                threads_hashtags = " ".join(hashtags_list)
+                threads_caption = f"{title}\n\n📲 Link in bio!\n\n{threads_hashtags}"
+                threads_caption = threads_caption[:500]
+                
+                threads_post_id = phase13.upload_to_threads(video_path, threads_caption, threads_user_id, threads_token)
+                if threads_post_id:
+                    print(f"✅ Threads post published! ID: {threads_post_id}")
+            else:
+                print("[Threads] Skipped — THREADS_USER_ID or THREADS_ACCESS_TOKEN not set.")
+        except Exception as threads_err:
+            print(f"⚠️ Warning: Threads upload encountered an error: {threads_err}")
     except google.auth.exceptions.RefreshError as ref_err:
         print("\n❌ Authentication Error: Refresh token may have expired or is invalid.")
         print("Re-generate your refresh token at: https://developers.google.com/oauthplayground")
