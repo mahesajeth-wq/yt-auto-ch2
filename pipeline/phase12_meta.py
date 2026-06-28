@@ -19,7 +19,7 @@ GRAPH_VIDEO_API = "https://graph-video.facebook.com/v22.0"
 
 # ── Facebook Page Reel Upload ────────────────────────────────────────────────
 
-def _fb_upload_reel(video_path: str, description: str, page_id: str, page_token: str) -> str | None:
+def _fb_upload_reel(video_path: str, description: str, page_id: str, page_token: str, title: str = "") -> str | None:
     """Upload a video as a Reel to a Facebook Page using resumable upload.
 
     Returns the video_id on success, None on failure.
@@ -65,15 +65,19 @@ def _fb_upload_reel(video_path: str, description: str, page_id: str, page_token:
 
     # Step 3: Publish (finish phase)
     print("[Meta/FB] Publishing Reel...")
+    payload = {
+        "upload_phase": "finish",
+        "video_id": video_id,
+        "description": description[:2000],
+        "video_state": "PUBLISHED",
+        "access_token": page_token,
+    }
+    if title:
+        payload["title"] = title[:100]
+
     finish_resp = requests.post(
         f"{GRAPH_API}/{page_id}/video_reels",
-        data={
-            "upload_phase": "finish",
-            "video_id": video_id,
-            "description": description[:2000],
-            "published": "true",
-            "access_token": page_token,
-        },
+        data=payload,
         timeout=30,
     )
     if finish_resp.status_code != 200:
@@ -248,7 +252,7 @@ def upload_to_meta(video_path: str, metadata: dict) -> dict:
     if fb_page_id and fb_page_token:
         print("\n📘 Uploading to Facebook Page as Reel...")
         try:
-            result["fb_video_id"] = _fb_upload_reel(video_path, caption, fb_page_id, fb_page_token)
+            result["fb_video_id"] = _fb_upload_reel(video_path, caption, fb_page_id, fb_page_token, title=title)
         except Exception as e:
             print(f"[Meta/FB] Error: {e}")
     else:
