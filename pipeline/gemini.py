@@ -442,7 +442,7 @@ class GeminiClient:
 
         # If using Pro, try ONE key only — don't burn all keys on Pro's 5 RPD limit
         if model_name != GEMINI_FLASH:
-            key = self.get_available_key()
+            key = _shared_pool.get_available_key()
             if key:
                 try:
                     single_url = url.replace("{key}", key)
@@ -483,7 +483,17 @@ class GeminiClient:
 
     # ── TTS ──────────────────────────────────────────────────────────────────
 
-    def generate_tts(self, text: str, voice: str = "Aoede", vocal_tone: str = None) -> tuple[bytes, str]:
+    def generate_tts(
+        self,
+        text: str,
+        voice: str = "Aoede",
+        vocal_tone: str = None,
+        voiceover_plan: str = None,
+        prev_text: str = None,
+        next_text: str = None,
+        segment_num: int = None,
+        total_segments: int = None
+    ) -> tuple[bytes, str]:
         """Returns (audio_bytes, mime_type). Raises TTSError on failure."""
         url = f"{GEMINI_API_BASE}/models/{GEMINI_TTS_MODEL}:generateContent?key={{key}}"
         
@@ -519,9 +529,28 @@ class GeminiClient:
             vocal_tone = None
         prefix = tone_prompts.get(vocal_tone, "Say this clearly with natural, engaging pacing")
         
+        # Build a highly contextual director instructions block
+        director_instructions = []
+        if prefix:
+            director_instructions.append(f"Vocal Delivery Guide: {prefix}")
+        if voiceover_plan:
+            director_instructions.append(f"Overall Video Voiceover Plan: {voiceover_plan}")
+        if segment_num and total_segments:
+            director_instructions.append(f"This is segment {segment_num} of {total_segments}.")
+        if prev_text:
+            director_instructions.append(f"For context, the previous spoken line was: '{prev_text}'")
+        if next_text:
+            director_instructions.append(f"For context, the next spoken line will be: '{next_text}'")
+            
+        instructions_str = "\n".join(director_instructions)
+        full_prompt = (
+            f"Director Instructions:\n{instructions_str}\n\n"
+            f"Narration text to speak (Speak ONLY the following text with the directed tone, pacing, and smooth transitions): {text}"
+        )
+        
         payload = {
             "contents": [{"role": "user", "parts": [
-                {"text": f"{prefix}: {text}"}
+                {"text": full_prompt}
             ]}],
             "generationConfig": {
                 "responseModalities": ["AUDIO"],

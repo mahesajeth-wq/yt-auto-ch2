@@ -47,7 +47,7 @@ def generate_audio(script: dict) -> list[str]:
     gemini_results: dict[int, str] = {}   # seg_id → filepath
     gemini_failed  = False
 
-    for seg in segments:
+    for idx, seg in enumerate(segments):
         seg_id   = seg["id"]
         out_path = f"output/tts_segment_{seg_id}.wav"
 
@@ -59,8 +59,19 @@ def generate_audio(script: dict) -> list[str]:
 
         try:
             vocal_tone = script.get("vocal_tone")
+            voiceover_plan = script.get("voiceover_plan")
+            prev_text = segments[idx - 1]["narration"] if idx > 0 else None
+            next_text = segments[idx + 1]["narration"] if idx < len(segments) - 1 else None
+
             audio_bytes, mime_type = gemini_client.generate_tts(
-                seg["narration"], voice=gemini_voice, vocal_tone=vocal_tone
+                seg["narration"],
+                voice=gemini_voice,
+                vocal_tone=vocal_tone,
+                voiceover_plan=voiceover_plan,
+                prev_text=prev_text,
+                next_text=next_text,
+                segment_num=idx + 1,
+                total_segments=len(segments)
             )
             if audio_bytes.startswith(b"RIFF") or "wav" in mime_type.lower():
                 with open(out_path, "wb") as wf:

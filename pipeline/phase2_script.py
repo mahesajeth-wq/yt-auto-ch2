@@ -96,7 +96,7 @@ You MUST return your response ONLY as a raw JSON object with no markdown syntax.
     }},
     {{
       "id": {segment_count - 1},
-      "narration": "A witty, sarcastic, or compelling Call-to-Action nudging viewers to check the link in the bio/description. MUST match the exact emotional mood of the video.",
+      "narration": "Witty, sarcastic 1-sentence Call-to-Action. Example: 'Want the full breakdown? Link in bio!' MUST literally contain the exact phrase 'link in bio' or 'link in the description'. Relaxed word count: up to 12 words.",
       "broll_query": "typing on smartphone close up",
       "duration_target": 4
     }},
@@ -120,7 +120,11 @@ For Segments 2 to (n-2):
 - Introduce an open loop (a second mystery or surprise fact) in Segment 3 that builds tension towards the loop twist.
 
 For Segment {segment_count - 1} specifically:
-- MUST be a 1-sentence Call-to-Action that matches the video's emotional tone and drives viewers to check the link in description/bio. Make it witty, sarcastic, or compelling — NOT generic.
+- MUST be a 1-sentence Call-to-Action that matches the video's emotional tone and drives viewers to check the link in description/bio.
+- MUST literally include the exact phrase "link in bio" or "link in the description".
+- Good examples: "The full story? Link in bio.", "Obsessed yet? Link in description has MORE.", "This rabbit hole goes deeper—link in bio."
+- NEVER write a generic CTA like "Dive deeper!" or "Want to learn more?" without explicitly mentioning the link.
+- Relaxed word limit: Up to 12 words to allow natural integration of the link phrase.
 
 For the final segment (Segment {segment_count}) specifically:
 - Resolve all loops and design the final sentence to end on a transition that flows seamlessly back into Segment 1's hook narration.
@@ -248,6 +252,20 @@ Return ONLY a raw JSON object for this segment with the updated "narration" and 
                 seg["verified"] = True
 
     
+    # ── Ensure CTA Segment Narration Mentions Link ────────────────────────────
+    if format_type == "short":
+        cta_idx = len(script.get("segments", [])) - 2
+        if cta_idx >= 0:
+            cta_seg = script["segments"][cta_idx]
+            cta_narration = cta_seg.get("narration", "")
+            if "link" not in cta_narration.lower():
+                print(f"[Phase 2] CTA Segment narration '{cta_narration}' lacks link mention. Enforcing...")
+                # Append link in bio in a natural way
+                if cta_narration.endswith("!"):
+                    cta_seg["narration"] = cta_narration[:-1] + " — link in bio!"
+                else:
+                    cta_seg["narration"] = cta_narration.rstrip(".").rstrip(",") + " — link in bio!"
+
     # ── Ensure Beacons Link in Description ────────────────────────────────────
     if "description" in script:
         desc = script["description"]
