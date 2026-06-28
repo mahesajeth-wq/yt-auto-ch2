@@ -95,15 +95,10 @@ You MUST return your response ONLY as a raw JSON object with no markdown syntax.
       "duration_target": 6
     }},
     {{
-      "id": {segment_count - 1},
-      "narration": "Witty, sarcastic 1-sentence Call-to-Action. Example: 'Want the full breakdown? Link in bio!' MUST literally contain the exact phrase 'link in bio' or 'link in the description'. Relaxed word count: up to 12 words.",
-      "broll_query": "typing on smartphone close up",
-      "duration_target": 4
-    }},
-    {{
       "id": {segment_count},
-      "narration": "Final sentence that GRAMMATICALLY FLOWS INTO Segment 1's first sentence when read back-to-back — creating an audio loop the viewer doesn't register as a restart. Loop seamlessly.",
-      "broll_query": "abstract visual loop continuous",
+      "narration": "Witty, sarcastic subject-aware Call-to-Action that MUST literally contain the exact phrase 'link in bio' or 'link in the description' AND grammatically flow into Segment 1's first sentence when read back-to-back — creating a seamless loop. Relaxed word count: up to 15 words.",
+      "broll_query": "typing on smartphone close up",
+      "broll_queries": ["typing on smartphone close up", "person holding phone scrolling", "tapping phone screen", "abstract loop animation"],
       "duration_target": 6
     }}
   ],
@@ -114,20 +109,18 @@ You MUST return your response ONLY as a raw JSON object with no markdown syntax.
 For Segment 1 specifically:
 - `broll_query` MUST describe a high-motion, high-contrast, visually arresting shot (fast motion, bright colors, dramatic close-up) — this is the opening pattern-interrupt that determines whether viewers keep watching.
 
-For Segments 2 to (n-2):
+For Segments 2 to (n-1):
 - Frame facts with visual or scientific paradoxes (e.g., 'Something the size of a city that weighs more than the sun' or 'The man who failed entrance exams rewrote the universe').
 - Deliver the single most mind-bending scientific fact in Segment 2.
 - Introduce an open loop (a second mystery or surprise fact) in Segment 3 that builds tension towards the loop twist.
 
-For Segment {segment_count - 1} specifically:
+For the final segment (Segment {segment_count}) specifically:
 - MUST be a 1-sentence Call-to-Action that matches the video's emotional tone and drives viewers to check the link in description/bio.
 - MUST literally include the exact phrase "link in bio" or "link in the description".
-- Good examples: "The full story? Link in bio.", "Obsessed yet? Link in description has MORE.", "This rabbit hole goes deeper—link in bio."
+- Good examples: "For more mind-blowing details, check the link in bio.", "The full breakdown is waiting at the link in bio.", "Ready for the deep dive? Check the link in description."
 - NEVER write a generic CTA like "Dive deeper!" or "Want to learn more?" without explicitly mentioning the link.
-- Relaxed word limit: Up to 12 words to allow natural integration of the link phrase.
-
-For the final segment (Segment {segment_count}) specifically:
-- Resolve all loops and design the final sentence to end on a transition that flows seamlessly back into Segment 1's hook narration.
+- Relaxed word limit: Up to 15 words to allow natural integration of the link phrase.
+- MUST resolve all loops and end on a transition that flows seamlessly back into Segment 1's hook narration.
 - The final sentence should THEMATICALLY echo or re-contextualize the IDEA from Segment 1's hook.
 """
     else:  # long-form
@@ -254,7 +247,7 @@ Return ONLY a raw JSON object for this segment with the updated "narration" and 
     
     # ── Ensure CTA Segment Narration Mentions Link ────────────────────────────
     if format_type == "short":
-        cta_idx = len(script.get("segments", [])) - 2
+        cta_idx = len(script.get("segments", [])) - 1
         if cta_idx >= 0:
             cta_seg = script["segments"][cta_idx]
             cta_narration = cta_seg.get("narration", "")
