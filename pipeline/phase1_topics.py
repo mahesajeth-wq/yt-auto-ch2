@@ -70,6 +70,8 @@ Each object must have exactly these fields:
         topics_list = _robust_json_loads(response_text)
         if not isinstance(topics_list, list):
             raise ValueError("Response is not a JSON list")
+        if not topics_list:
+            raise ValueError("Response is an empty list")
     except Exception as e:
         print(f"Error parsing topics: {e}")
         topics_list = [
