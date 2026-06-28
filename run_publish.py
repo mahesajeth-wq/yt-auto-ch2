@@ -96,95 +96,101 @@ def main():
     print(f"Thumbnail: {thumbnail_path}")
     print(f"Title: {metadata.get('title')}")
     
+# --- DECOUPLED PLATFORM UPLOADS ---
+    print("\n🚀 Starting platform uploads...")
+    
+    # 1. YouTube Upload
     try:
+        print("\n📺 Initiating YouTube upload...")
         video_id = phase9.upload_to_youtube(video_path, thumbnail_path, metadata)
-        print(f"\n✅ Successfully published to YouTube! Video ID: {video_id}")
+        print(f"✅ Successfully published to YouTube! Video ID: {video_id}")
         print(f"Direct Link: https://www.youtube.com/watch?v={video_id}")
-        
-        # --- DAILYMOTION UPLOAD ---
-        try:
-            print("\n🚀 Initiating Dailymotion upload...")
-            import importlib
-            phase10 = importlib.import_module("pipeline.phase10_dailymotion")
-            dm_id = phase10.upload_to_dailymotion(video_path, metadata)
-            if dm_id:
-                print(f"✅ Successfully published to Dailymotion! Video ID: {dm_id}")
-        except Exception as dm_err:
-            print(f"⚠️ Warning: Dailymotion upload encountered an error: {dm_err}")
-
-        # --- RUMBLE UPLOAD ---
-        try:
-            print("\n🚀 Initiating Rumble upload...")
-            phase11 = importlib.import_module("pipeline.phase11_rumble")
-            rumble_url = phase11.upload_to_rumble(video_path, metadata)
-            if rumble_url:
-                print(f"✅ Successfully published to Rumble! URL: {rumble_url}")
-        except Exception as rb_err:
-            print(f"⚠️ Warning: Rumble upload encountered an error: {rb_err}")
-
-        # --- META (FACEBOOK + INSTAGRAM) UPLOAD ---
-        try:
-            print("\n🚀 Initiating Meta (Facebook + Instagram) upload...")
-            phase12 = importlib.import_module("pipeline.phase12_meta")
-            meta_result = phase12.upload_to_meta(video_path, metadata)
-            if meta_result.get("fb_video_id"):
-                print(f"✅ Facebook Reel published! ID: {meta_result['fb_video_id']}")
-            if meta_result.get("ig_media_id"):
-                print(f"✅ Instagram Reel published! ID: {meta_result['ig_media_id']}")
-        except Exception as meta_err:
-            print(f"⚠️ Warning: Meta upload encountered an error: {meta_err}")
-
-        # --- THREADS UPLOAD ---
-        try:
-            print("\n🚀 Initiating Threads upload...")
-            threads_user_id = os.environ.get("THREADS_USER_ID", os.environ.get("IG_USER_ID", ""))
-            threads_token = os.environ.get("THREADS_ACCESS_TOKEN", os.environ.get("FB_PAGE_TOKEN", ""))
-            
-            if threads_user_id and threads_token:
-                phase13 = importlib.import_module("pipeline.phase13_threads")
-                
-                # Build Threads caption
-                title = metadata.get("title", "")
-                hashtags_list = []
-                tags = metadata.get("tags", [])
-                if isinstance(tags, str):
-                    tags = [t.strip() for t in tags.split(",") if t.strip()]
-                elif isinstance(tags, list):
-                    pass
-                else:
-                    tags = []
-                    
-                for tag in tags:
-                    clean_tag = "".join(c for c in tag if c.isalnum())
-                    if clean_tag:
-                        hashtags_list.append(f"#{clean_tag.lower()}")
-                        
-                desc = metadata.get("description", "")
-                for word in desc.split():
-                    if word.startswith("#"):
-                        clean_h = "#" + "".join(c for c in word if c.isalnum())
-                        if clean_h != "#" and clean_h.lower() not in [h.lower() for h in hashtags_list]:
-                            hashtags_list.append(clean_h.lower())
-                            
-                threads_hashtags = " ".join(hashtags_list)
-                threads_caption = f"{title}\n\n📲 Link in bio!\n\n{threads_hashtags}"
-                threads_caption = threads_caption[:500]
-                
-                threads_post_id = phase13.upload_to_threads(video_path, threads_caption, threads_user_id, threads_token)
-                if threads_post_id:
-                    print(f"✅ Threads post published! ID: {threads_post_id}")
-            else:
-                print("[Threads] Skipped — THREADS_USER_ID or THREADS_ACCESS_TOKEN not set.")
-        except Exception as threads_err:
-            print(f"⚠️ Warning: Threads upload encountered an error: {threads_err}")
     except google.auth.exceptions.RefreshError as ref_err:
-        print("\n❌ Authentication Error: Refresh token may have expired or is invalid.")
+        print("\n⚠️ YouTube Authentication Error: Refresh token may have expired or is invalid.")
         print("Re-generate your refresh token at: https://developers.google.com/oauthplayground")
         print(f"Details: {ref_err}")
-        sys.exit(1)
     except Exception as e:
-        print(f"\n❌ Publish failed with error: {e}")
-        sys.exit(1)
+        print(f"⚠️ YouTube upload failed with error: {e}")
+        
+    # 2. Dailymotion Upload
+    try:
+        print("\n🚀 Initiating Dailymotion upload...")
+        import importlib
+        phase10 = importlib.import_module("pipeline.phase10_dailymotion")
+        dm_id = phase10.upload_to_dailymotion(video_path, metadata)
+        if dm_id:
+            print(f"✅ Successfully published to Dailymotion! Video ID: {dm_id}")
+    except Exception as dm_err:
+        print(f"⚠️ Warning: Dailymotion upload encountered an error: {dm_err}")
+
+    # 3. Rumble Upload
+    try:
+        print("\n🚀 Initiating Rumble upload...")
+        import importlib
+        phase11 = importlib.import_module("pipeline.phase11_rumble")
+        rumble_url = phase11.upload_to_rumble(video_path, metadata)
+        if rumble_url:
+            print(f"✅ Successfully published to Rumble! URL: {rumble_url}")
+    except Exception as rb_err:
+        print(f"⚠️ Warning: Rumble upload encountered an error: {rb_err}")
+
+    # 4. Meta (Facebook + Instagram) Upload
+    try:
+        print("\n🚀 Initiating Meta (Facebook + Instagram) upload...")
+        import importlib
+        phase12 = importlib.import_module("pipeline.phase12_meta")
+        meta_result = phase12.upload_to_meta(video_path, metadata)
+        if meta_result.get("fb_video_id"):
+            print(f"✅ Facebook Reel published! ID: {meta_result['fb_video_id']}")
+        if meta_result.get("ig_media_id"):
+            print(f"✅ Instagram Reel published! ID: {meta_result['ig_media_id']}")
+    except Exception as meta_err:
+        print(f"⚠️ Warning: Meta upload encountered an error: {meta_err}")
+
+    # 5. Threads Upload
+    try:
+        print("\n🚀 Initiating Threads upload...")
+        threads_user_id = os.environ.get("THREADS_USER_ID", os.environ.get("IG_USER_ID", ""))
+        threads_token = os.environ.get("THREADS_ACCESS_TOKEN", os.environ.get("FB_PAGE_TOKEN", ""))
+        
+        if threads_user_id and threads_token:
+            import importlib
+            phase13 = importlib.import_module("pipeline.phase13_threads")
+            
+            # Build Threads caption
+            title = metadata.get("title", "")
+            hashtags_list = []
+            tags = metadata.get("tags", [])
+            if isinstance(tags, str):
+                tags = [t.strip() for t in tags.split(",") if t.strip()]
+            elif isinstance(tags, list):
+                pass
+            else:
+                tags = []
+                
+            for tag in tags:
+                clean_tag = "".join(c for c in tag if c.isalnum())
+                if clean_tag:
+                    hashtags_list.append(f"#{clean_tag.lower()}")
+                    
+            desc = metadata.get("description", "")
+            for word in desc.split():
+                if word.startswith("#"):
+                    clean_h = "#" + "".join(c for c in word if c.isalnum())
+                    if clean_h != "#" and clean_h.lower() not in [h.lower() for h in hashtags_list]:
+                        hashtags_list.append(clean_h.lower())
+                        
+            threads_hashtags = " ".join(hashtags_list)
+            threads_caption = f"{title}\n\n📲 Link in bio!\n\n{threads_hashtags}"
+            threads_caption = threads_caption[:500]
+            
+            threads_post_id = phase13.upload_to_threads(video_path, threads_caption, threads_user_id, threads_token)
+            if threads_post_id:
+                print(f"✅ Threads post published! ID: {threads_post_id}")
+        else:
+            print("[Threads] Skipped — THREADS_USER_ID or THREADS_ACCESS_TOKEN not set.")
+    except Exception as threads_err:
+        print(f"⚠️ Warning: Threads upload encountered an error: {threads_err}")
 
 if __name__ == "__main__":
     main()
