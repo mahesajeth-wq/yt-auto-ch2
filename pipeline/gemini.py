@@ -564,7 +564,14 @@ class GeminiClient:
         except Exception as exc:
             raise TTSError(str(exc)) from exc
         try:
-            inline = resp.json()["candidates"][0]["content"]["parts"][0]["inlineData"]
+            data = resp.json()
+            if "promptFeedback" in data and "blockReason" in data["promptFeedback"]:
+                reason = data["promptFeedback"]["blockReason"]
+                raise TTSError(f"Safety block: {reason}")
+            
+            inline = data["candidates"][0]["content"]["parts"][0]["inlineData"]
             return base64.b64decode(inline["data"]), inline["mimeType"]
         except Exception as exc:
+            if "Safety block:" in str(exc):
+                raise exc
             raise TTSError(f"TTS response parse error: {exc}") from exc

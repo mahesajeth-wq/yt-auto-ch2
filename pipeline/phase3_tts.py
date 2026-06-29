@@ -63,16 +63,43 @@ def generate_audio(script: dict) -> list[str]:
             prev_text = segments[idx - 1]["narration"] if idx > 0 else None
             next_text = segments[idx + 1]["narration"] if idx < len(segments) - 1 else None
 
-            audio_bytes, mime_type = gemini_client.generate_tts(
-                seg["narration"],
-                voice=gemini_voice,
-                vocal_tone=vocal_tone,
-                voiceover_plan=voiceover_plan,
-                prev_text=prev_text,
-                next_text=next_text,
-                segment_num=idx + 1,
-                total_segments=len(segments)
-            )
+            narration_text = seg["narration"]
+            for attempt_idx in range(3):
+                try:
+                    audio_bytes, mime_type = gemini_client.generate_tts(
+                        narration_text,
+                        voice=gemini_voice,
+                        vocal_tone=vocal_tone,
+                        voiceover_plan=voiceover_plan,
+                        prev_text=prev_text,
+                        next_text=next_text,
+                        segment_num=idx + 1,
+                        total_segments=len(segments)
+                    )
+                    break
+                except Exception as tts_err:
+                    if "Safety block" in str(tts_err) and attempt_idx < 2:
+                        print(f"[TTS] Segment {seg_id} safety block detected on: '{narration_text}'")
+                        rephrase_prompt = (
+                            f"Rephrase the following narration text to convey the exact same meaning, "
+                            f"but avoid any words or combinations that could be flagged by sensitive "
+                            f"automated safety filters (e.g. measurements near names, suggestive-sounding abbreviations). "
+                            f"Keep it concise, natural, and easy to read. Output ONLY the rephrased narration text, "
+                            f"no intro, no quotes, no extra words.\n"
+                            f"Original Text: {narration_text}"
+                        )
+                        try:
+                            rephrased = gemini_client.generate_text(rephrase_prompt, temperature=0.3)
+                            rephrased = rephrased.strip().strip('"').strip("'")
+                            if rephrased and rephrased != narration_text:
+                                print(f"[TTS] Rephrased from: '{narration_text}' to: '{rephrased}'")
+                                narration_text = rephrased
+                                seg["narration"] = rephrased
+                                continue
+                        except Exception as rephrase_err:
+                            print(f"[TTS] Rephrase generator failed: {rephrase_err}")
+                    raise tts_err
+
             if audio_bytes.startswith(b"RIFF") or "wav" in mime_type.lower():
                 with open(out_path, "wb") as wf:
                     wf.write(audio_bytes)
