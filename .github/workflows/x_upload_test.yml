@@ -27,7 +27,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install --upgrade twikit yt-dlp requests
+          pip install --upgrade twifork yt-dlp requests
 
       - name: Download and upload
         env:
@@ -135,7 +135,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install --upgrade twikit yt-dlp requests
+          pip install --upgrade twifork yt-dlp requests
 
       - name: Download and upload
         env:
@@ -243,7 +243,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install --upgrade twikit yt-dlp requests
+          pip install --upgrade twifork yt-dlp requests
 
       - name: Download and upload
         env:
@@ -351,7 +351,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install --upgrade twikit yt-dlp requests
+          pip install --upgrade twifork yt-dlp requests
 
       - name: Download and upload
         env:
