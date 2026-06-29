@@ -34,6 +34,7 @@ jobs:
           X_USERNAME: ${{ secrets.X_USERNAME_CH1 }}
           X_EMAIL: ${{ secrets.X_EMAIL_CH1 }}
           X_PASSWORD: ${{ secrets.X_PASSWORD_CH1 }}
+          X_COOKIES: ${{ secrets.X_COOKIES_CH1 }}
           YT_URL: ${{ secrets.LAST_YT_URL_CH1 }}
           COOKIE_FILE: cookies_ch1.json
           TARGET_REPO: yt-auto
@@ -46,13 +47,16 @@ jobs:
               username = os.environ.get("X_USERNAME", "").strip()
               email = os.environ.get("X_EMAIL", "").strip()
               password = os.environ.get("X_PASSWORD", "").strip()
+              cookies_secret = os.environ.get("X_COOKIES", "").strip()
               yt_url = os.environ.get("YT_URL", "").strip()
               cookie_file = os.environ.get("COOKIE_FILE", "").strip()
               target_repo = os.environ.get("TARGET_REPO", "").strip()
               token = os.environ.get("GITHUB_TOKEN", "").strip()
               
-              if not username or not password or not email:
-                  raise ValueError("Missing X credentials.")
+              if cookies_secret:
+                  print("Saving cookies from secrets...")
+                  with open(cookie_file, "w") as f:
+                      f.write(cookies_secret)
 
               downloaded = False
               if target_repo:
@@ -95,14 +99,25 @@ jobs:
                   print("Loading cookies...")
                   try:
                       client.load_cookies(cookie_file)
+                      print("Cookies loaded successfully.")
                   except Exception as e:
-                      print(f"Cookie load failed: {e}. Logging in...")
+                      print(f"Cookie load failed: {e}.")
+                      if not username or not password or not email:
+                          raise ValueError("Cookies failed and missing username/password.")
+                      print("Falling back to login...")
                       await client.login(auth_info_1=username, auth_info_2=email, password=password)
                       client.save_cookies(cookie_file)
               else:
+                  if not username or not password or not email:
+                      raise ValueError("No cookies file and X credentials missing.")
                   print("Logging in...")
-                  await client.login(auth_info_1=username, auth_info_2=email, password=password)
-                  client.save_cookies(cookie_file)
+                  try:
+                      await client.login(auth_info_1=username, auth_info_2=email, password=password)
+                      client.save_cookies(cookie_file)
+                  except Exception as e:
+                      print(f"Login failed: {e}")
+                      print("IMPORTANT: Cloudflare may be blocking credentials login. Export cookies from your browser and set them in X_COOKIES secret.")
+                      raise
                   
               print("Uploading media...")
               media_id = await client.upload_media("output.mp4")
@@ -142,6 +157,7 @@ jobs:
           X_USERNAME: ${{ secrets.X_USERNAME_CH2 }}
           X_EMAIL: ${{ secrets.X_EMAIL_CH2 }}
           X_PASSWORD: ${{ secrets.X_PASSWORD_CH2 }}
+          X_COOKIES: ${{ secrets.X_COOKIES_CH2 }}
           YT_URL: ${{ secrets.LAST_YT_URL_CH2 }}
           COOKIE_FILE: cookies_ch2.json
           TARGET_REPO: yt-auto-ch2
@@ -154,13 +170,16 @@ jobs:
               username = os.environ.get("X_USERNAME", "").strip()
               email = os.environ.get("X_EMAIL", "").strip()
               password = os.environ.get("X_PASSWORD", "").strip()
+              cookies_secret = os.environ.get("X_COOKIES", "").strip()
               yt_url = os.environ.get("YT_URL", "").strip()
               cookie_file = os.environ.get("COOKIE_FILE", "").strip()
               target_repo = os.environ.get("TARGET_REPO", "").strip()
               token = os.environ.get("GITHUB_TOKEN", "").strip()
               
-              if not username or not password or not email:
-                  raise ValueError("Missing X credentials.")
+              if cookies_secret:
+                  print("Saving cookies from secrets...")
+                  with open(cookie_file, "w") as f:
+                      f.write(cookies_secret)
 
               downloaded = False
               if target_repo:
@@ -203,14 +222,25 @@ jobs:
                   print("Loading cookies...")
                   try:
                       client.load_cookies(cookie_file)
+                      print("Cookies loaded successfully.")
                   except Exception as e:
-                      print(f"Cookie load failed: {e}. Logging in...")
+                      print(f"Cookie load failed: {e}.")
+                      if not username or not password or not email:
+                          raise ValueError("Cookies failed and missing username/password.")
+                      print("Falling back to login...")
                       await client.login(auth_info_1=username, auth_info_2=email, password=password)
                       client.save_cookies(cookie_file)
               else:
+                  if not username or not password or not email:
+                      raise ValueError("No cookies file and X credentials missing.")
                   print("Logging in...")
-                  await client.login(auth_info_1=username, auth_info_2=email, password=password)
-                  client.save_cookies(cookie_file)
+                  try:
+                      await client.login(auth_info_1=username, auth_info_2=email, password=password)
+                      client.save_cookies(cookie_file)
+                  except Exception as e:
+                      print(f"Login failed: {e}")
+                      print("IMPORTANT: Cloudflare may be blocking credentials login. Export cookies from your browser and set them in X_COOKIES secret.")
+                      raise
                   
               print("Uploading media...")
               media_id = await client.upload_media("output.mp4")
@@ -250,6 +280,7 @@ jobs:
           X_USERNAME: ${{ secrets.X_USERNAME_CH3 }}
           X_EMAIL: ${{ secrets.X_EMAIL_CH3 }}
           X_PASSWORD: ${{ secrets.X_PASSWORD_CH3 }}
+          X_COOKIES: ${{ secrets.X_COOKIES_CH3 }}
           YT_URL: ${{ secrets.LAST_YT_URL_CH3 }}
           COOKIE_FILE: cookies_ch3.json
           TARGET_REPO: yt-auto-ch3
@@ -262,13 +293,16 @@ jobs:
               username = os.environ.get("X_USERNAME", "").strip()
               email = os.environ.get("X_EMAIL", "").strip()
               password = os.environ.get("X_PASSWORD", "").strip()
+              cookies_secret = os.environ.get("X_COOKIES", "").strip()
               yt_url = os.environ.get("YT_URL", "").strip()
               cookie_file = os.environ.get("COOKIE_FILE", "").strip()
               target_repo = os.environ.get("TARGET_REPO", "").strip()
               token = os.environ.get("GITHUB_TOKEN", "").strip()
               
-              if not username or not password or not email:
-                  raise ValueError("Missing X credentials.")
+              if cookies_secret:
+                  print("Saving cookies from secrets...")
+                  with open(cookie_file, "w") as f:
+                      f.write(cookies_secret)
 
               downloaded = False
               if target_repo:
@@ -311,14 +345,25 @@ jobs:
                   print("Loading cookies...")
                   try:
                       client.load_cookies(cookie_file)
+                      print("Cookies loaded successfully.")
                   except Exception as e:
-                      print(f"Cookie load failed: {e}. Logging in...")
+                      print(f"Cookie load failed: {e}.")
+                      if not username or not password or not email:
+                          raise ValueError("Cookies failed and missing username/password.")
+                      print("Falling back to login...")
                       await client.login(auth_info_1=username, auth_info_2=email, password=password)
                       client.save_cookies(cookie_file)
               else:
+                  if not username or not password or not email:
+                      raise ValueError("No cookies file and X credentials missing.")
                   print("Logging in...")
-                  await client.login(auth_info_1=username, auth_info_2=email, password=password)
-                  client.save_cookies(cookie_file)
+                  try:
+                      await client.login(auth_info_1=username, auth_info_2=email, password=password)
+                      client.save_cookies(cookie_file)
+                  except Exception as e:
+                      print(f"Login failed: {e}")
+                      print("IMPORTANT: Cloudflare may be blocking credentials login. Export cookies from your browser and set them in X_COOKIES secret.")
+                      raise
                   
               print("Uploading media...")
               media_id = await client.upload_media("output.mp4")
@@ -358,6 +403,7 @@ jobs:
           X_USERNAME: ${{ secrets.X_USERNAME_CH4 }}
           X_EMAIL: ${{ secrets.X_EMAIL_CH4 }}
           X_PASSWORD: ${{ secrets.X_PASSWORD_CH4 }}
+          X_COOKIES: ${{ secrets.X_COOKIES_CH4 }}
           YT_URL: ${{ secrets.LAST_YT_URL_CH4 }}
           COOKIE_FILE: cookies_ch4.json
           TARGET_REPO: yt-auto-ch4
@@ -370,13 +416,16 @@ jobs:
               username = os.environ.get("X_USERNAME", "").strip()
               email = os.environ.get("X_EMAIL", "").strip()
               password = os.environ.get("X_PASSWORD", "").strip()
+              cookies_secret = os.environ.get("X_COOKIES", "").strip()
               yt_url = os.environ.get("YT_URL", "").strip()
               cookie_file = os.environ.get("COOKIE_FILE", "").strip()
               target_repo = os.environ.get("TARGET_REPO", "").strip()
               token = os.environ.get("GITHUB_TOKEN", "").strip()
               
-              if not username or not password or not email:
-                  raise ValueError("Missing X credentials.")
+              if cookies_secret:
+                  print("Saving cookies from secrets...")
+                  with open(cookie_file, "w") as f:
+                      f.write(cookies_secret)
 
               downloaded = False
               if target_repo:
@@ -419,14 +468,25 @@ jobs:
                   print("Loading cookies...")
                   try:
                       client.load_cookies(cookie_file)
+                      print("Cookies loaded successfully.")
                   except Exception as e:
-                      print(f"Cookie load failed: {e}. Logging in...")
+                      print(f"Cookie load failed: {e}.")
+                      if not username or not password or not email:
+                          raise ValueError("Cookies failed and missing username/password.")
+                      print("Falling back to login...")
                       await client.login(auth_info_1=username, auth_info_2=email, password=password)
                       client.save_cookies(cookie_file)
               else:
+                  if not username or not password or not email:
+                      raise ValueError("No cookies file and X credentials missing.")
                   print("Logging in...")
-                  await client.login(auth_info_1=username, auth_info_2=email, password=password)
-                  client.save_cookies(cookie_file)
+                  try:
+                      await client.login(auth_info_1=username, auth_info_2=email, password=password)
+                      client.save_cookies(cookie_file)
+                  except Exception as e:
+                      print(f"Login failed: {e}")
+                      print("IMPORTANT: Cloudflare may be blocking credentials login. Export cookies from your browser and set them in X_COOKIES secret.")
+                      raise
                   
               print("Uploading media...")
               media_id = await client.upload_media("output.mp4")
