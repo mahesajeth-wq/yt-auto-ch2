@@ -55,7 +55,6 @@ jobs:
                   return
 
               downloaded = False
-              # Method 1: Try downloading artifact from GitHub
               if target_repo:
                   print(f"Attempting to download latest artifact from {target_repo}...")
                   headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github.v3+json"}
@@ -71,7 +70,8 @@ jobs:
                           if arts:
                               art = arts[0]
                               dl_url = art["archive_download_url"]
-                              print(f"Downloading artifact: {art[\"name\"]} ...")
+                              art_name = art["name"]
+                              print(f"Downloading artifact: {art_name} ...")
                               r_dl = requests.get(dl_url, headers=headers, timeout=60)
                               r_dl.raise_for_status()
                               z = zipfile.ZipFile(io.BytesIO(r_dl.content))
@@ -84,7 +84,6 @@ jobs:
                   except Exception as e:
                       print(f"Artifact download failed: {e}. Falling back to yt-dlp...")
 
-              # Method 2: Fallback to yt-dlp if artifact not downloaded
               if not downloaded:
                   if not yt_url:
                       print("No YT URL available and artifact download failed. Cannot proceed.")
@@ -185,7 +184,8 @@ jobs:
                           if arts:
                               art = arts[0]
                               dl_url = art["archive_download_url"]
-                              print(f"Downloading artifact: {art[\"name\"]} ...")
+                              art_name = art["name"]
+                              print(f"Downloading artifact: {art_name} ...")
                               r_dl = requests.get(dl_url, headers=headers, timeout=60)
                               r_dl.raise_for_status()
                               z = zipfile.ZipFile(io.BytesIO(r_dl.content))
@@ -298,7 +298,8 @@ jobs:
                           if arts:
                               art = arts[0]
                               dl_url = art["archive_download_url"]
-                              print(f"Downloading artifact: {art[\"name\"]} ...")
+                              art_name = art["name"]
+                              print(f"Downloading artifact: {art_name} ...")
                               r_dl = requests.get(dl_url, headers=headers, timeout=60)
                               r_dl.raise_for_status()
                               z = zipfile.ZipFile(io.BytesIO(r_dl.content))
@@ -411,7 +412,8 @@ jobs:
                           if arts:
                               art = arts[0]
                               dl_url = art["archive_download_url"]
-                              print(f"Downloading artifact: {art[\"name\"]} ...")
+                              art_name = art["name"]
+                              print(f"Downloading artifact: {art_name} ...")
                               r_dl = requests.get(dl_url, headers=headers, timeout=60)
                               r_dl.raise_for_status()
                               z = zipfile.ZipFile(io.BytesIO(r_dl.content))
