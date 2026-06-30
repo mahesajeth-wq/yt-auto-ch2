@@ -41,28 +41,28 @@ def vision_rank_broll(
             f'You are evaluating {len(thumbnails)} candidate B-roll thumbnail(s) '
             f'(indexed 0 to {len(thumbnails) - 1}) for the above narration.\n\n'
             f'SCORING RULES — read carefully:\n'
-            f'1. The clip must SPECIFICALLY represent the concept, creature, '
-            f'phenomenon, or place named in the narration. A vague thematic '
-            f'connection scores low.\n'
+            f'1. The clip must represent the general subject, device, concept, or process discussed in the narration or search query. '
+            f'Do NOT reject general subject videos (e.g. a washing machine, general engine, or factory) just because they do not depict the specific '
+            f'internal component or microscopic failure mentioned in the narration. A general thematic match of the main subject is highly acceptable (scores 75-90) and far better than falling back to static images.\n'
             f'2. Score every candidate from 0-100:\n'
             f'   - 90-100: exact subject or highly specific real-world match\n'
-            f'   - 75-89: strong contextual match, likely viewer understands immediately\n'
-            f'   - 55-74: usable fallback, related but not exact\n'
-            f'   - 0-54: bad mismatch or generic filler\n'
+            f'   - 75-89: strong contextual/thematic match of the main subject\n'
+            f'   - 35-74: usable fallback or generic filler related to the topic\n'
+            f'   - 0-34: bad mismatch or completely unrelated topic\n'
             f'3. Penalize clips showing:\n'
             f'   - Generic office workers, handshakes, or people at computers\n'
             f'   - Abstract light effects, bokeh, or undefined particle animations\n'
             f'   - A generic human doing an unrelated activity\n'
             f'   - Any scene that could belong to a completely different video topic\n'
             f'4. Pick the highest-scoring candidate even when imperfect, so the pipeline can use the best available asset from all providers.\n'
-            f'5. Set match_found=false only when the best candidate scores below 55.\n\n'
+            f'5. Set match_found=false only when the best candidate scores below 35.\n\n'
             f'Return ONLY valid JSON (no markdown):\n'
             f'{{"best_index": <int or null>, '
             f'"match_found": <bool>, '
             f'"confidence": <0-100 int>, '
             f'"candidate_scores": [<0-100 int for each candidate>], '
             f'"reject_reason": "<why rejected, or empty string if accepted>"}}\n\n'
-            f'Set match_found=true if confidence >= 55. Still explain weaknesses in reject_reason if confidence < 75.'
+            f'Set match_found=true if confidence >= 35. Still explain weaknesses in reject_reason if confidence < 75.'
         )
     }]
 
@@ -101,7 +101,7 @@ def vision_rank_broll(
 
         if not (found and isinstance(idx, int) and 0 <= idx < len(thumbnails)):
             return None, False
-        if confidence < 55:
+        if confidence < 35:
             print(f"[VisionMatch] Very low confidence ({confidence}) — rejecting.")
             return None, False
 
