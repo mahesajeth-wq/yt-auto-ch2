@@ -946,24 +946,24 @@ def fetch_broll(query: str, format_type: str, segment_index: int, duration: floa
     print(f"[B-roll] Segment {segment_index}: falling back to single-frame waterfall search...")
     other_videos = [
         ("Pixabay (main)", lambda: _pixabay_video(query)),
-        ("Pixabay (fallback)", lambda: _pixabay_video(fallback_query)),
+        ("Pixabay (fallback)", lambda: _pixabay_video(clean_fallback)),
         ("Coverr (main)", lambda: _coverr_video(query)),
-        ("Coverr (fallback)", lambda: _coverr_video(fallback_query)),
+        ("Coverr (fallback)", lambda: _coverr_video(clean_fallback)),
         ("Klipy GIF (main)", lambda: _klipy_video(query)),
-        ("Klipy GIF (fallback)", lambda: _klipy_video(fallback_query)),
+        ("Klipy GIF (fallback)", lambda: _klipy_video(clean_fallback)),
     ]
     if NASA_BROLL_ENABLED:
         other_videos.extend([
             ("NASA video (main)", lambda: _nasa_video(query)),
-            ("NASA video (fallback)", lambda: _nasa_video(fallback_query)),
+            ("NASA video (fallback)", lambda: _nasa_video(clean_fallback)),
         ])
     other_videos.extend([
         ("DVIDS video (main)", lambda: _dvids_video(query)),
-        ("DVIDS video (fallback)", lambda: _dvids_video(fallback_query)),
+        ("DVIDS video (fallback)", lambda: _dvids_video(clean_fallback)),
         ("Wikimedia video (main)", lambda: _wikimedia_video(query)),
-        ("Wikimedia video (fallback)", lambda: _wikimedia_video(fallback_query)),
+        ("Wikimedia video (fallback)", lambda: _wikimedia_video(clean_fallback)),
         ("Archive video (main)", lambda: _archive_video(query)),
-        ("Archive video (fallback)", lambda: _archive_video(fallback_query)),
+        ("Archive video (fallback)", lambda: _archive_video(clean_fallback)),
     ])
 
 
@@ -1016,13 +1016,13 @@ def fetch_broll(query: str, format_type: str, segment_index: int, duration: floa
     if NASA_BROLL_ENABLED:
         img_sources.extend([
             (_nasa_image, query),
-            (_nasa_image, fallback_query),
+            (_nasa_image, clean_fallback),
         ])
     img_sources.extend([
         (_openverse_image, query),
-        (_openverse_image, fallback_query),
+        (_openverse_image, clean_fallback),
         (_wikipedia_image, query),
-        (_wikipedia_image, fallback_query)
+        (_wikipedia_image, clean_fallback)
     ])
 
     img_url = None
