@@ -174,6 +174,42 @@ def _fetch_freesound_music(topic: str, duration_seconds: int) -> str | None:
     return None
 
 
+def _archive_audio(topic: str) -> str | None:
+    try:
+        import requests
+        r = requests.get(
+            "https://archive.org/advancedsearch.php",
+            params={
+                "q": f'({topic} ambient) AND mediatype:audio AND licenseurl:"https://creativecommons.org/publicdomain/zero/1.0/"',
+                "fl[]": "identifier",
+                "rows": 5,
+                "output": "json",
+            },
+            headers={"User-Agent": "Mozilla/5.0"},
+            timeout=20,
+        )
+        r.raise_for_status()
+        docs = r.json().get("response", {}).get("docs", [])
+        if not docs:
+            return None
+        pick = random.choice(docs[:3])
+        identifier = pick["identifier"]
+        # Fetch the actual file list for this item
+        meta = requests.get(
+            f"https://archive.org/metadata/{identifier}",
+            timeout=15
+        ).json()
+        files = [f for f in meta.get("files", [])
+                 if f.get("format", "").lower() in ("mp3", "ogg vorbis", "flac")]
+        if not files:
+            return None
+        f = files[0]
+        return f"https://archive.org/download/{identifier}/{f['name']}"
+    except Exception as e:
+        print(f"[Music] Archive audio failed: {e}")
+        return None
+
+
 def generate_music(topic: str, duration_seconds: int = 35) -> str:
     out_path = "output/music.wav"
     if os.path.exists(out_path) and os.path.getsize(out_path) > 1000:
@@ -189,7 +225,39 @@ def generate_music(topic: str, duration_seconds: int = 35) -> str:
             print(f"[Music] Using Freesound CC0 track → {out_path}")
             return out_path
     except Exception as exc:
-        print(f"[Music] Freesound attempt failed ({exc}), falling back to procedural.")
+        print(f"[Music] Freesound attempt failed ({exc})")
+
+    # ── Try Internet Archive Audio CC0 second ────────────────────────────────
+    try:
+        print(f"[Music] Searching Internet Archive audio for '{topic}'...")
+        arch_url = _archive_audio(topic)
+        if arch_url:
+            print(f"[Music] Downloading Internet Archive audio: {arch_url}")
+            import requests
+            import tempfile
+            dl = requests.get(arch_url, timeout=40)
+            dl.raise_for_status()
+            with tempfile.TemporaryDirectory(prefix="archive_audio_") as tmpdir:
+                ext = "mp3"
+                if ".ogg" in arch_url.lower():
+                    ext = "ogg"
+                elif ".flac" in arch_url.lower():
+                    ext = "flac"
+                tmp_input = os.path.join(tmpdir, f"input.{ext}")
+                tmp_wav = os.path.join(tmpdir, "output.wav")
+                with open(tmp_input, "wb") as f:
+                    f.write(dl.content)
+                subprocess.run(
+                    ["ffmpeg", "-y", "-i", tmp_input, "-ar", "44100", "-ac", "1", tmp_wav],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True,
+                )
+                if os.path.exists(tmp_wav) and os.path.getsize(tmp_wav) > 1000:
+                    os.makedirs("output", exist_ok=True)
+                    shutil.copy(tmp_wav, out_path)
+                    print(f"[Music] Using Internet Archive Audio track → {out_path}")
+                    return out_path
+    except Exception as exc:
+        print(f"[Music] Internet Archive audio fallback failed ({exc})")
 
     # ── Fallback: procedural ambient generation ──────────────────────────────
     print(f"Generating procedural ambient background music ({duration_seconds}s)...")

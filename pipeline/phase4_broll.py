@@ -455,6 +455,50 @@ def _wikimedia_video(query: str) -> str | None:
         return None
 
 
+def _dvids_candidates(query: str, n: int = 3) -> list[dict]:
+    try:
+        r = requests.get(
+            "https://www.dvidshub.net/api/search",
+            params={"query": query, "type": "video",
+                    "rows": n * 2, "output": "json"},
+            headers={"User-Agent": "Mozilla/5.0"},
+            timeout=20,
+        )
+        r.raise_for_status()
+        out = []
+        for item in r.json().get("results", []):
+            v = item.get("download_url") or item.get("file_url")
+            t = item.get("thumbnail_url") or item.get("image_url")
+            if v and t:
+                out.append({"video_url": v, "thumb_url": t, "source": "DVIDS"})
+        return out[:n]
+    except Exception as e:
+        print(f"[B-roll] DVIDS failed: {e}")
+        return []
+
+def _dvids_video(query: str) -> str | None:
+    candidates = _dvids_candidates(query, n=1)
+    return candidates[0]["video_url"] if candidates else None
+
+def _openverse_image(query: str) -> str | None:
+    try:
+        r = requests.get(
+            "https://api.openverse.org/v1/images/",
+            params={"q": query, "license": "cc0,by",
+                    "page_size": 5, "format": "json"},
+            headers={"User-Agent": "Mozilla/5.0"},
+            timeout=15,
+        )
+        r.raise_for_status()
+        results = r.json().get("results", [])
+        if not results:
+            return None
+        return random.choice(results[:3]).get("url")
+    except Exception as e:
+        print(f"[B-roll] Openverse failed: {e}")
+        return None
+
+
 def _nasa_video(query: str) -> str | None:
     """Fetches a real NASA video for science/space topics. Completely free, no key."""
     try:
@@ -500,6 +544,36 @@ def _nasa_video(query: str) -> str | None:
 
 def _archive_video(query: str) -> str | None:
     """Search Internet Archive for public domain movies. No API key needed."""
+    try:
+        r = requests.get(
+            "https://archive.org/advancedsearch.php",
+            params={
+                "q": f"collection:prelinger AND title:({query})",
+                "fl[]": "identifier",
+                "rows": "5",
+                "output": "json",
+            },
+            headers={"User-Agent": "yt-auto/1.0 (educational-pipeline)"},
+            timeout=20,
+        )
+        r.raise_for_status()
+        docs = r.json().get("response", {}).get("docs", [])
+        if docs:
+            identifier = docs[0]["identifier"]
+            r_files = requests.get(
+                f"https://archive.org/metadata/{urllib.parse.quote(identifier)}",
+                headers={"User-Agent": "yt-auto/1.0 (educational-pipeline)"},
+                timeout=15,
+            )
+            r_files.raise_for_status()
+            files = r_files.json().get("files", [])
+            for f in files:
+                name = f.get("name", "")
+                if name.endswith(".mp4") and int(f.get("size", 0)) > 10_000:
+                    return f"https://archive.org/download/{identifier}/{urllib.parse.quote(name)}"
+    except Exception as e:
+        print(f"[B-roll] Prelinger filter search failed for '{query}': {e}")
+
     try:
         r = requests.get(
             "https://archive.org/advancedsearch.php",
@@ -744,6 +818,16 @@ def fetch_broll(query: str, format_type: str, segment_index: int, duration: floa
             candidates.append(wiki_cand)
             break
 
+    # 2.5 Fetch DVIDS video candidates (up to 2)
+    for q in queries_to_try[:2]:
+        if budget_exceeded():
+            break
+        print(f"[B-roll] Segment {segment_index}: checking DVIDS video for '{q}'…")
+        d_cands = _dvids_candidates(q, n=2)
+        if d_cands:
+            candidates.extend(d_cands)
+            break
+
     # 3. Fetch Coverr candidates (up to 2)
     if COVERR_API_KEY:
         for q in queries_to_try[:2]:
@@ -844,6 +928,8 @@ def fetch_broll(query: str, format_type: str, segment_index: int, duration: floa
             ("NASA video (fallback)", lambda: _nasa_video(fallback_query)),
         ])
     other_videos.extend([
+        ("DVIDS video (main)", lambda: _dvids_video(query)),
+        ("DVIDS video (fallback)", lambda: _dvids_video(fallback_query)),
         ("Wikimedia video (main)", lambda: _wikimedia_video(query)),
         ("Wikimedia video (fallback)", lambda: _wikimedia_video(fallback_query)),
         ("Archive video (main)", lambda: _archive_video(query)),
@@ -903,6 +989,8 @@ def fetch_broll(query: str, format_type: str, segment_index: int, duration: floa
             (_nasa_image, fallback_query),
         ])
     img_sources.extend([
+        (_openverse_image, query),
+        (_openverse_image, fallback_query),
         (_wikipedia_image, query),
         (_wikipedia_image, fallback_query)
     ])

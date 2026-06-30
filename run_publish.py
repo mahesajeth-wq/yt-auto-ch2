@@ -150,8 +150,8 @@ def main():
     # 5. Threads Upload
     try:
         print("\n🚀 Initiating Threads upload...")
-        threads_user_id = os.environ.get("THREADS_USER_ID") or os.environ.get("IG_USER_ID") or ""
-        threads_token = os.environ.get("THREADS_ACCESS_TOKEN") or os.environ.get("FB_PAGE_TOKEN") or ""
+        threads_user_id = os.environ.get("THREADS_USER_ID") or ""
+        threads_token = os.environ.get("THREADS_ACCESS_TOKEN") or ""
         
         if threads_user_id and threads_token:
             import importlib
