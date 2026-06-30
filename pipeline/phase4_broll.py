@@ -799,74 +799,81 @@ def fetch_broll(query: str, format_type: str, segment_index: int, duration: floa
     # 1. Fetch NASA video candidate if science/space query
     is_science = any(k in query.lower() for k in ["space", "nasa", "star", "planet", "galaxy", "orbit", "telescope", "asteroid", "science", "physics", "chemical", "atom", "molecule", "earth", "moon", "sun", "nebula", "black hole"])
     if is_science and NASA_BROLL_ENABLED:
-        for q in queries_to_try[:2]:
+        for q in queries_to_try:
             if budget_exceeded():
                 break
             print(f"[B-roll] Segment {segment_index}: checking NASA video for '{q}'…")
             nasa_cand = _nasa_video_candidate(q)
             if nasa_cand:
                 candidates.append(nasa_cand)
-                break
+                if len(candidates) >= 2:
+                    break
 
     # 2. Fetch Wikimedia video candidate
-    for q in queries_to_try[:2]:
+    for q in queries_to_try:
         if budget_exceeded():
             break
         print(f"[B-roll] Segment {segment_index}: checking Wikimedia video for '{q}'…")
         wiki_cand = _wikimedia_video_candidate(q)
         if wiki_cand:
             candidates.append(wiki_cand)
-            break
+            if len(candidates) >= 2:
+                break
 
     # 2.5 Fetch DVIDS video candidates (up to 2)
-    for q in queries_to_try[:2]:
+    for q in queries_to_try:
         if budget_exceeded():
             break
         print(f"[B-roll] Segment {segment_index}: checking DVIDS video for '{q}'…")
         d_cands = _dvids_candidates(q, n=2)
         if d_cands:
             candidates.extend(d_cands)
-            break
+            if len(candidates) >= 3:
+                break
 
     # 3. Fetch Coverr candidates (up to 2)
     if COVERR_API_KEY:
-        for q in queries_to_try[:2]:
+        for q in queries_to_try:
             if budget_exceeded():
                 break
             c_cands = _coverr_candidates(q, orientation, n=2)
             if c_cands:
                 candidates.extend(c_cands)
-                break
+                if len(candidates) >= 4:
+                    break
 
     # 4. Fetch Klipy GIF/meme candidates (converted to MP4 if selected)
     if KLIPY_API_KEY:
-        for q in queries_to_try[:2]:
+        for q in queries_to_try:
             if budget_exceeded():
                 break
             k_cands = _klipy_candidates(q, n=2)
             if k_cands:
                 candidates.extend(k_cands)
-                break
+                if len(candidates) >= 4:
+                    break
 
     # 5. Fetch Pexels candidates (up to 2)
     if PEXELS_API_KEY:
-        for q in queries_to_try[:2]:
+        for q in queries_to_try:
             if budget_exceeded():
                 break
             p_cands = _pexels_candidates(q, orientation, n=2)
             if p_cands:
                 candidates.extend(p_cands)
-                break
+                if len(candidates) >= 4:
+                    break
 
     # 6. Fetch Pixabay candidates (up to 2)
     if PIXABAY_API_KEY:
-        for q in queries_to_try[:2]:
+        for q in queries_to_try:
             if budget_exceeded():
                 break
             px_cands = _pixabay_candidates(q, n=2)
             if px_cands:
                 candidates.extend(px_cands)
-                break
+                if len(candidates) >= 4:
+                    break
 
     # Apply de-duplication: filter out candidates that have already been used
     if used_urls:
