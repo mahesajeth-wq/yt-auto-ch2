@@ -757,6 +757,22 @@ def _pil_placeholder(query: str, w: int, h: int, img_path: str):
     img.save(img_path, "JPEG", quality=90)
 
 
+def _make_clean_fallback(query: str) -> str:
+    stop_words = {
+        "failure", "failed", "failed", "breaking", "broken", "broke",
+        "damaged", "damage", "collapsed", "collapse", "slipping", "slipped",
+        "slip", "during", "mechanism", "problems", "problem", "defect",
+        "defective", "faulty", "error", "issue", "issues", "accident",
+        "disaster", "ruined", "destroy", "destroyed", "destroying",
+        "a", "an", "the", "in", "on", "at", "to", "for", "with", "by", "of"
+    }
+    words = query.lower().split()
+    filtered = [w for w in words if w not in stop_words]
+    if filtered:
+        return " ".join(filtered)
+    return query
+
+
 # ── Master fetch function ────────────────────────────────────────────────────
 
 def fetch_broll(query: str, format_type: str, segment_index: int, duration: float = 6.0, narration: str = "", alt_queries: list[str] | None = None, used_urls: set[str] | None = None) -> str:
@@ -786,12 +802,19 @@ def fetch_broll(query: str, format_type: str, segment_index: int, duration: floa
         return out_path
 
     # Build fallback queries
-    words         = query.split()
-    fallback_query = " ".join(words[:2]) if len(words) > 2 else query
     queries_to_try = [query]
     if alt_queries:
         queries_to_try.extend([q for q in alt_queries if q != query])
-    queries_to_try.append(fallback_query)
+    
+    clean_fallback = _make_clean_fallback(query)
+    if clean_fallback not in queries_to_try:
+        queries_to_try.append(clean_fallback)
+        
+    clean_words = clean_fallback.split()
+    if len(clean_words) > 2:
+        general_fallback = " ".join(clean_words[:2])
+        if general_fallback not in queries_to_try:
+            queries_to_try.append(general_fallback)
 
     # Gather candidate video metadata from ALL platforms
     candidates = []
