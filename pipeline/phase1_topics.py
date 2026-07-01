@@ -24,13 +24,13 @@ def select_topic(format_type: str) -> dict:
 
     # ── 2. Determine subcluster + evergreen vs trending ──────────────────────
     current_subcluster = NATURAL_WORLD_SUBCLUSTERS[subcluster_idx % len(NATURAL_WORLD_SUBCLUSTERS)]
-    is_trending = (call_count % 5 == 0)   # every 5th call = trending topic
+    is_trending = (call_count % 3 != 0)   # 2 out of 3 calls = trending topic
 
     if is_trending:
         topic_instruction = (
             f"Generate 5 TRENDING topics about {current_subcluster} "
-            f"that are currently in the science news this week. "
-            f"Frame each as a recent discovery or finding that most people haven't heard yet."
+            f"that are currently in the nature, biology, space, and earth science news this week. "
+            f"Frame each as a recent discovery, breakthrough, or finding that most people haven't heard yet."
         )
     else:
         topic_instruction = (
@@ -49,6 +49,12 @@ Sub-cluster focus for this batch: {current_subcluster}
 
 CRITICAL: Do NOT suggest any topic similar to these recently published topics:
 {json.dumps(recent_topics, indent=2)}
+
+SAFETY & COMPLIANCE CONSTRAINTS (MANDATORY):
+- The topics MUST be 100% advertiser-friendly, family-friendly, and compliant with YouTube/Meta community guidelines.
+- Strictly AVOID: animal cruelty, gore, graphic violence, hunting/poaching, or depressing environmental doom-and-gloom.
+- Avoid political controversies, conspiracy theories, or tragic/graphic events.
+- Focus on educational, curious, and inspiring natural world/animal facts.
 
 AVOID: pet animals, compilations, human psychology, AI, technology, space (those are Channel 1).
 FOCUS: the natural world — oceans, forests, weather, geology, wild species.
