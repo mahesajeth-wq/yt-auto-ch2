@@ -28,6 +28,9 @@ jobs:
           python-version: '3.11'
           cache: 'pip'
 
+      - name: Setup FFmpeg
+        uses: FedericoTerzi/setup-ffmpeg@v3
+
       - name: Install Bebas Neue Font
         run: |
           mkdir -p ~/.local/share/fonts
