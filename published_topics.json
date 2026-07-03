@@ -29,8 +29,9 @@
     "What most people don't know about plant memory: The model plant *Arabidopsis thaliana* can pass on acquired stress resilience (e.g., to drought or cold) to its offspring for up to four generations through specific epigenetic modifications.",
     "What most people don't know about red sprites: These massive, fleeting electrical discharges shoot upwards from powerful thunderstorms, reaching altitudes of up to 90 km (56 miles) in milliseconds, powered by the storm's charge imbalance.",
     "Early Earth's Dynamic Crust: A recent breakthrough reveals that Earth's continental crust began forming and undergoing subduction-like processes much earlier than previously believed, challenging the long-held 'stagnant lid' hypothesis for our planet's infancy.",
-    "What most people don't know about homing pigeons: They can detect changes in Earth's magnetic field as small as 10 nanoteslas, allowing navigation over hundreds of miles."
+    "What most people don't know about homing pigeons: They can detect changes in Earth's magnetic field as small as 10 nanoteslas, allowing navigation over hundreds of miles.",
+    "Deep-sea microbes thrive in extremely alkaline (pH 12) environments, challenging assumptions about life's limits and potential origins."
   ],
-  "subcluster_idx": 0,
-  "call_count": 30
+  "subcluster_idx": 1,
+  "call_count": 31
 }
