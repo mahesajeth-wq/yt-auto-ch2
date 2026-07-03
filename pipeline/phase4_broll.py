@@ -956,7 +956,7 @@ def fetch_broll(query: str, format_type: str, segment_index: int, duration: floa
             print(f"[B-roll] No candidates with valid thumbnails for Segment {segment_index}.")
 
     # ── Fallback 1: Single Frame fallback search on other videos waterfall ─────────────────
-    print(f"[B-roll] Segment {segment_index}: falling back to single-frame waterfall search...")
+    print(f"[B-roll] Segment {segment_index}: falling back to parallel waterfall search...")
     
     # We prioritize archive databases (NASA, DVIDS, Wikimedia, Archive) at the top of the waterfall,
     # and search with main, clean fallback, and general fallback queries.
@@ -992,61 +992,136 @@ def fetch_broll(query: str, format_type: str, segment_index: int, duration: floa
         ("Klipy GIF (general)", lambda: _klipy_video(general_fallback)),
     ])
 
-    from pipeline.vision_match import vision_rank_broll
-
+    # Gather candidate URLs to download in parallel (up to 5)
+    candidates_to_download = []
+    seen_urls = set()
     for label, fetch_url_fn in other_videos:
         if budget_exceeded():
             break
-        video_url = fetch_url_fn()
-        if video_url:
-            # Check de-duplication
-            if used_urls and video_url in used_urls:
-                continue
-            print(f"[B-roll] Downloading video from {label}…")
-            if _download_video_robust(video_url, out_path, segment_index):
-                temp_frame_path = f"output/temp_frame_{segment_index}.jpg"
-                if os.path.exists(temp_frame_path):
-                    os.remove(temp_frame_path)
+        try:
+            video_url = fetch_url_fn()
+            if video_url and video_url not in seen_urls:
+                if used_urls and video_url in used_urls:
+                    continue
+                seen_urls.add(video_url)
+                candidates_to_download.append({
+                    "label": label,
+                    "video_url": video_url
+                })
+                if len(candidates_to_download) >= 5:
+                    break
+        except Exception as e:
+            print(f"[B-roll] Failed to fetch URL for {label}: {e}")
+
+    # Helper function for parallel downloads and frame extraction
+    def download_and_extract_frame(cand, idx):
+        lbl = cand["label"]
+        vurl = cand["video_url"]
+        temp_v = f"output/temp_video_{segment_index}_{idx}.mp4"
+        temp_f = f"output/temp_frame_{segment_index}_{idx}.jpg"
+        
+        for p in [temp_v, temp_f]:
+            if os.path.exists(p):
+                try:
+                    os.remove(p)
+                except Exception:
+                    pass
+        
+        print(f"[B-roll] Downloading video from {lbl} in parallel...")
+        if _download_video_robust(vurl, temp_v, f"{segment_index}_{idx}"):
+            v_dur = _get_video_duration(temp_v)
+            seek = 0.0
+            if v_dur > 20.0:
+                seek = min(10.0, v_dur * 0.15)
+            elif v_dur > 10.0:
+                seek = 2.0
+            elif v_dur > 4.0:
+                seek = 1.0
                 
-                # Check duration of downloaded video
-                total_dur = _get_video_duration(out_path)
+            cmd = [
+                "ffmpeg", "-y", "-ss", f"{seek:.3f}", "-i", temp_v,
+                "-vf", "thumbnail=n=30", "-frames:v", "1", temp_f
+            ]
+            import subprocess
+            res = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            if res.returncode == 0 and os.path.exists(temp_f):
+                with open(temp_f, "rb") as fh:
+                    f_data = fh.read()
+                return {
+                    "label": lbl,
+                    "video_url": vurl,
+                    "temp_v": temp_v,
+                    "temp_f": temp_f,
+                    "frame_data": f_data
+                }
+        
+        # Cleanup on failure
+        for p in [temp_v, temp_f]:
+            if os.path.exists(p):
+                try:
+                    os.remove(p)
+                except Exception:
+                    pass
+        return None
+
+    # Download candidates in parallel threads
+    import concurrent.futures
+    downloaded_results = []
+    if candidates_to_download:
+        max_workers = min(len(candidates_to_download), 5)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = [
+                executor.submit(download_and_extract_frame, cand, i)
+                for i, cand in enumerate(candidates_to_download)
+            ]
+            for fut in concurrent.futures.as_completed(futures):
+                try:
+                    res = fut.result()
+                    if res:
+                        downloaded_results.append(res)
+                except Exception as e:
+                    print(f"[B-roll] Thread download failed: {e}")
+
+    # Rank downloaded candidates using Gemini Vision Match in one batch
+    from pipeline.vision_match import vision_rank_broll
+    if downloaded_results:
+        print(f"[B-roll] Segment {segment_index}: Ranking {len(downloaded_results)} downloaded candidates in batch...")
+        thumbs = [r["frame_data"] for r in downloaded_results]
+        best_idx, match_found = vision_rank_broll(thumbs, narration, query)
+        
+        if match_found and best_idx is not None and 0 <= best_idx < len(downloaded_results):
+            winner = downloaded_results[best_idx]
+            print(f"[B-roll] Parallel winner chosen! Source: {winner['label']} (Index: {best_idx})")
+            
+            # Keep the winner video
+            if os.path.exists(out_path):
+                os.remove(out_path)
+            import shutil
+            shutil.move(winner["temp_v"], out_path)
+            
+            if used_urls is not None:
+                used_urls.add(winner["video_url"])
                 
-                # Dynamic seek offset to extract a representative frame (avoiding blank/black intro frames)
-                seek_time = 0.0
-                if total_dur > 20.0:
-                    seek_time = min(10.0, total_dur * 0.15)
-                elif total_dur > 10.0:
-                    seek_time = 2.0
-                elif total_dur > 4.0:
-                    seek_time = 1.0
-                
-                print(f"[B-roll] Extracting thumbnail frame at {seek_time:.3f}s from {label} video...")
-                cmd = [
-                    "ffmpeg", "-y", "-ss", f"{seek_time:.3f}", "-i", out_path,
-                    "-vf", "thumbnail=n=30", "-frames:v", "1", temp_frame_path
-                ]
-                import subprocess
-                subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                
-                if os.path.exists(temp_frame_path):
-                    with open(temp_frame_path, "rb") as tf:
-                        frame_data = tf.read()
-                    os.remove(temp_frame_path)
-                    
-                    _, match_found = vision_rank_broll([frame_data], narration, query)
-                    if match_found:
-                        print(f"[B-roll] {label} video accepted by Vision Match.")
-                        if used_urls is not None:
-                            used_urls.add(video_url)
-                        return out_path
-                    else:
-                        print(f"[B-roll] {label} video rejected by Vision Match. Continuing waterfall…")
-                        os.remove(out_path)
-                else:
-                    print(f"[B-roll] Warning: Frame extraction failed for {label}. Accepting by default.")
-                    if used_urls is not None:
-                        used_urls.add(video_url)
-                    return out_path
+            # Clean up all files
+            for r in downloaded_results:
+                for p in [r["temp_v"], r["temp_f"]]:
+                    if os.path.exists(p):
+                        try:
+                            os.remove(p)
+                        except Exception:
+                            pass
+            return out_path
+        else:
+            print(f"[B-roll] None of the {len(downloaded_results)} parallel candidates matched.")
+            
+        # Clean up on no match
+        for r in downloaded_results:
+            for p in [r["temp_v"], r["temp_f"]]:
+                if os.path.exists(p):
+                    try:
+                        os.remove(p)
+                    except Exception:
+                        pass
 
     # ── Fallback 2: image sources (all converted with Ken Burns) ─────────────────────
     print(f"[B-roll] Segment {segment_index}: trying image sources…")
