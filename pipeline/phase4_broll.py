@@ -773,6 +773,19 @@ def _make_clean_fallback(query: str) -> str:
     return query
 
 
+def _get_video_duration(filepath: str) -> float:
+    cmd = [
+        "ffprobe", "-v", "error",
+        "-show_entries", "format=duration",
+        "-of", "default=noprint_wrappers=1:nokey=1",
+        filepath
+    ]
+    try:
+        import subprocess
+        return float(subprocess.check_output(cmd).decode().strip())
+    except Exception:
+        return 0.0
+
 # ── Master fetch function ────────────────────────────────────────────────────
 
 def fetch_broll(query: str, format_type: str, segment_index: int, duration: float = 6.0, narration: str = "", alt_queries: list[str] | None = None, used_urls: set[str] | None = None) -> str:
@@ -944,28 +957,40 @@ def fetch_broll(query: str, format_type: str, segment_index: int, duration: floa
 
     # ── Fallback 1: Single Frame fallback search on other videos waterfall ─────────────────
     print(f"[B-roll] Segment {segment_index}: falling back to single-frame waterfall search...")
-    other_videos = [
-        ("Pixabay (main)", lambda: _pixabay_video(query)),
-        ("Pixabay (fallback)", lambda: _pixabay_video(clean_fallback)),
-        ("Coverr (main)", lambda: _coverr_video(query)),
-        ("Coverr (fallback)", lambda: _coverr_video(clean_fallback)),
-        ("Klipy GIF (main)", lambda: _klipy_video(query)),
-        ("Klipy GIF (fallback)", lambda: _klipy_video(clean_fallback)),
-    ]
+    
+    # We prioritize archive databases (NASA, DVIDS, Wikimedia, Archive) at the top of the waterfall,
+    # and search with main, clean fallback, and general fallback queries.
+    other_videos = []
     if NASA_BROLL_ENABLED:
         other_videos.extend([
             ("NASA video (main)", lambda: _nasa_video(query)),
             ("NASA video (fallback)", lambda: _nasa_video(clean_fallback)),
+            ("NASA video (general)", lambda: _nasa_video(general_fallback)),
         ])
     other_videos.extend([
         ("DVIDS video (main)", lambda: _dvids_video(query)),
         ("DVIDS video (fallback)", lambda: _dvids_video(clean_fallback)),
+        ("DVIDS video (general)", lambda: _dvids_video(general_fallback)),
         ("Wikimedia video (main)", lambda: _wikimedia_video(query)),
         ("Wikimedia video (fallback)", lambda: _wikimedia_video(clean_fallback)),
+        ("Wikimedia video (general)", lambda: _wikimedia_video(general_fallback)),
         ("Archive video (main)", lambda: _archive_video(query)),
         ("Archive video (fallback)", lambda: _archive_video(clean_fallback)),
+        ("Archive video (general)", lambda: _archive_video(general_fallback)),
     ])
-
+    
+    # Stock sites are fallbacks at the bottom of the waterfall list
+    other_videos.extend([
+        ("Pixabay (main)", lambda: _pixabay_video(query)),
+        ("Pixabay (fallback)", lambda: _pixabay_video(clean_fallback)),
+        ("Pixabay (general)", lambda: _pixabay_video(general_fallback)),
+        ("Coverr (main)", lambda: _coverr_video(query)),
+        ("Coverr (fallback)", lambda: _coverr_video(clean_fallback)),
+        ("Coverr (general)", lambda: _coverr_video(general_fallback)),
+        ("Klipy GIF (main)", lambda: _klipy_video(query)),
+        ("Klipy GIF (fallback)", lambda: _klipy_video(clean_fallback)),
+        ("Klipy GIF (general)", lambda: _klipy_video(general_fallback)),
+    ])
 
     from pipeline.vision_match import vision_rank_broll
 
@@ -983,10 +1008,24 @@ def fetch_broll(query: str, format_type: str, segment_index: int, duration: floa
                 if os.path.exists(temp_frame_path):
                     os.remove(temp_frame_path)
                 
+                # Check duration of downloaded video
+                total_dur = _get_video_duration(out_path)
+                
+                # Dynamic seek offset to extract a representative frame (avoiding blank/black intro frames)
+                seek_time = 0.0
+                if total_dur > 20.0:
+                    seek_time = min(10.0, total_dur * 0.15)
+                elif total_dur > 10.0:
+                    seek_time = 2.0
+                elif total_dur > 4.0:
+                    seek_time = 1.0
+                
+                print(f"[B-roll] Extracting thumbnail frame at {seek_time:.3f}s from {label} video...")
                 cmd = [
-                    "ffmpeg", "-y", "-i", out_path,
+                    "ffmpeg", "-y", "-ss", f"{seek_time:.3f}", "-i", out_path,
                     "-vf", "thumbnail=n=30", "-frames:v", "1", temp_frame_path
                 ]
+                import subprocess
                 subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 
                 if os.path.exists(temp_frame_path):
