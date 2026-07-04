@@ -1,3 +1,24 @@
+
+def download_font(font_name: str, url: str):
+    import urllib.request
+    import os
+    import subprocess
+    
+    font_dir = os.path.expanduser("~/.local/share/fonts")
+    os.makedirs(font_dir, exist_ok=True)
+    
+    filename = url.split("/")[-1]
+    font_path = os.path.join(font_dir, filename)
+    
+    if not os.path.exists(font_path):
+        print(f"[Font] Downloading {font_name} from {url}...")
+        try:
+            urllib.request.urlretrieve(url, font_path)
+            subprocess.run(["fc-cache", "-f"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            print(f"[Font] Installed {font_name} successfully.")
+        except Exception as e:
+            print(f"[Font] Failed to download {font_name}: {e}")
+
 import os
 import soundfile as sf
 
@@ -167,6 +188,24 @@ def generate_captions(audio_files: list[str], script: dict, format_type: str = "
             print(f"Segment {seg['id']} duration: {duration:.2f}s (rule-timed), Cumulative offset: {time_offset:.2f}s")
         
     # Dynamic ASS subtitle configuration based on format
+    fonts_pool = [
+        ("Bebas Neue", "https://github.com/google/fonts/raw/main/ofl/bebasneue/BebasNeue-Regular.ttf"),
+        ("Anton", "https://github.com/google/fonts/raw/main/ofl/anton/Anton-Regular.ttf"),
+        ("Oswald", "https://github.com/google/fonts/raw/main/ofl/oswald/static/Oswald-Bold.ttf"),
+        ("Montserrat ExtraBold", "https://github.com/google/fonts/raw/main/ofl/montserrat/static/Montserrat-ExtraBold.ttf"),
+        ("Archivo Black", "https://github.com/google/fonts/raw/main/ofl/archivoblack/ArchivoBlack-Regular.ttf")
+    ]
+    import random
+    picked_font, picked_url = random.choice(fonts_pool)
+    try:
+        download_font(picked_font, picked_url)
+        script["font_name"] = picked_font
+        print(f"[Font] Picked and installed font: {picked_font}")
+    except Exception as e:
+        picked_font = "Bebas Neue"
+        script["font_name"] = "Bebas Neue"
+        print(f"[Font] Error downloading, falling back to Bebas Neue: {e}")
+
     if format_type == "short":
         play_res_x = 1080
         play_res_y = 1920
@@ -185,7 +224,7 @@ PlayResY: {play_res_y}
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,Bebas Neue,{font_size},&H00FFFFFF,&H000000FF,&H00000000,&H90000000,-1,0,0,0,100,100,0,0,1,8,2,2,30,30,{margin_v},1
+Style: Default,{picked_font},{font_size},&H00FFFFFF,&H000000FF,&H00000000,&H90000000,-1,0,0,0,100,100,0,0,1,8,2,2,30,30,{margin_v},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text

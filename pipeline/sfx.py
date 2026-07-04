@@ -173,6 +173,24 @@ def _read_wav_file(filepath: str) -> np.ndarray:
         return sig
 
 
+
+def _fetch_cached_sfx(category: str) -> str | None:
+    # Categories: "transition_whoosh", "pop_ding", "dramatic_boom", "success_chime", "record_scratch"
+    queries = {
+        "pop_ding": ["cartoon pop sfx", "ui button pop click", "bubble pop sound"],
+        "dramatic_boom": ["vine boom", "cinematic shock boom hit", "sub bass drop"],
+        "success_chime": ["ding correct", "success chime bell", "retro game ding"],
+        "record_scratch": ["record scratch stop", "dj scratch stop", "glitch transition error"]
+    }
+    
+    q_list = queries.get(category, [])
+    for q in q_list:
+        path = _fetch_freesound_sfx(q, max_duration=1.5)
+        if path:
+            return path
+    return None
+
+
 def create_sfx_track(
     clip_boundary_times: list[float],
     total_duration: float,
@@ -181,50 +199,81 @@ def create_sfx_track(
     topic: str = "",
 ) -> str:
     """
-    Build a single WAV track that contains an impact at t=0, and a whoosh at each clip boundary time.
-    This track is mixed into the final video at low volume via FFmpeg amix.
-
-    Args:
-        clip_boundary_times: List of times (seconds) where clips change.
-                             Typically cumulative sums of TTS durations.
-                             Pass [] for no SFX.
-        total_duration:      Total video duration in seconds.
-        sample_rate:         Output sample rate (must match FFmpeg resampling target).
-        whoosh_volume:       Mix volume for SFX (0.0–1.0). Default 0.30.
-        topic:               Optional topic string to search Freesound for context-appropriate whooshes.
-
-    Returns:
-        Path to the generated "output/sfx_track.wav".
+    Build a single WAV track that contains:
+    - A dramatic boom/hit at t=0
+    - A transition whoosh at each clip boundary
+    - A pop/ding sound during Segment 1 fact reveal
+    - A record scratch/glitch during Segment 2 plot twist
+    - A success chime at the start of the final CTA segment
     """
     os.makedirs("output", exist_ok=True)
 
     total_samples = int(total_duration * sample_rate)
     track         = np.zeros(total_samples, dtype=np.float64)
 
-    # 1. Opening impact at t=0
-    impact = _synth_impact(sample_rate)
-    end_imp = min(total_samples, len(impact))
-    if end_imp > 0:
-        track[0:end_imp] += (impact[:end_imp].astype(np.float64) / 32767) * 0.75
+    # 1. Load sound effects
+    boom_sig = None
+    boom_path = _fetch_cached_sfx("dramatic_boom")
+    if boom_path:
+        try:
+            boom_sig = _read_wav_file(boom_path)
+        except Exception:
+            pass
+    if boom_sig is None:
+        boom_sig = _synth_impact(sample_rate)
 
-    # 2. Whooshes at clip boundaries
+    pop_sig = None
+    pop_path = _fetch_cached_sfx("pop_ding")
+    if pop_path:
+        try:
+            pop_sig = _read_wav_file(pop_path)
+        except Exception:
+            pass
+    if pop_sig is None:
+        pop_sig = _synth_snap(sample_rate)
+
+    scratch_sig = None
+    scratch_path = _fetch_cached_sfx("record_scratch")
+    if scratch_path:
+        try:
+            scratch_sig = _read_wav_file(scratch_path)
+        except Exception:
+            pass
+    if scratch_sig is None:
+        scratch_sig = _synth_digital_whoosh(sample_rate, duration=0.3)
+
+    chime_sig = None
+    chime_path = _fetch_cached_sfx("success_chime")
+    if chime_path:
+        try:
+            chime_sig = _read_wav_file(chime_path)
+        except Exception:
+            pass
+    if chime_sig is None:
+        chime_sig = _synth_snap(sample_rate) # fallback to snap
+
+    # Place opening impact/boom at t=0
+    end_imp = min(total_samples, len(boom_sig))
+    if end_imp > 0:
+        track[0:end_imp] += (boom_sig[:end_imp].astype(np.float64) / 32767) * 0.70
+
+    # Calculate segment start/end times
+    segment_times = [0.0] + clip_boundary_times + [total_duration]
+
+    # Whooshes at clip boundaries
     whoosh_pool = []
     if topic:
         topic_words = [w for w in topic.lower().split() if len(w) > 4]
-        queries = ["whoosh", "swoosh", "transition swoosh", "cinematic transition", "digital transition", "glitch transition"]
+        queries = ["whoosh", "swoosh", "transition swoosh", "cinematic transition", "digital transition"]
         if topic_words:
-            random.shuffle(topic_words)
-            queries = [f"{topic_words[0]} whoosh", f"{topic_words[0]} transition"] + queries
-        
-        # Download up to 3 context-appropriate SFX files
-        for q in queries[:4]:
+            queries = [f"{topic_words[0]} whoosh"] + queries
+        for q in queries[:3]:
             path = _fetch_freesound_sfx(q, max_duration=1.5)
             if path:
                 try:
-                    sig = _read_wav_file(path)
-                    whoosh_pool.append(sig)
-                except Exception as e:
-                    print(f"[SFX] Failed to read WAV {path}: {e}")
+                    whoosh_pool.append(_read_wav_file(path))
+                except Exception:
+                    pass
 
     for t_sec in clip_boundary_times:
         if whoosh_pool:
@@ -232,12 +281,36 @@ def create_sfx_track(
         else:
             w_sig = random.choice([_synth_whoosh(sample_rate), _synth_digital_whoosh(sample_rate)])
 
-        # Place whoosh 0.12s BEFORE the boundary so it arrives naturally
         start = max(0, int((t_sec - 0.12) * sample_rate))
         end   = min(total_samples, start + len(w_sig))
         length = end - start
         if length > 0:
             track[start:end] += (w_sig[:length].astype(np.float64) / 32767) * whoosh_volume
+
+    # Place context-appropriate meme/trendy SFX:
+    # 1. Pop/Ding during Segment 1 mid-point
+    if len(segment_times) >= 3:
+        seg1_mid = (segment_times[1] + segment_times[2]) / 2.0
+        start = max(0, int(seg1_mid * sample_rate))
+        end = min(total_samples, start + len(pop_sig))
+        if end - start > 0:
+            track[start:end] += (pop_sig[:end-start].astype(np.float64) / 32767) * 0.35
+
+    # 2. Record scratch / glitch at Segment 2 start
+    if len(segment_times) >= 4:
+        seg2_start = segment_times[2]
+        start = max(0, int(seg2_start * sample_rate))
+        end = min(total_samples, start + len(scratch_sig))
+        if end - start > 0:
+            track[start:end] += (scratch_sig[:end-start].astype(np.float64) / 32767) * 0.30
+
+    # 3. Success chime at start of final CTA segment
+    if len(segment_times) >= 3:
+        cta_start = segment_times[-2]
+        start = max(0, int(cta_start * sample_rate))
+        end = min(total_samples, start + len(chime_sig))
+        if end - start > 0:
+            track[start:end] += (chime_sig[:end-start].astype(np.float64) / 32767) * 0.40
 
     # Clip to int16
     track_int16 = np.clip(track * 32767, -32768, 32767).astype(np.int16)
@@ -247,5 +320,6 @@ def create_sfx_track(
         wf.setsampwidth(2)
         wf.setframerate(sample_rate)
         wf.writeframes(track_int16.tobytes())
-    print(f"[SFX] SFX track created: 1 impact, {len(clip_boundary_times)} whoosh(es) at {clip_boundary_times}")
+    print(f"[SFX] Custom SFX track created with booms, pops, scratches, and chimes.")
     return out_path
+

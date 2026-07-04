@@ -130,7 +130,7 @@ def assemble_video(broll_files: list[str], tts_files: list[str], captions_ass: s
             filters.append(f"drawbox=y=0:color={color}:t=fill:enable='between(t,{t_start:.3f},{t_start+0.15:.3f})'")
             
         # 2. Big title hook card (first 1.5s) - Yellow font with premium box padding
-        filters.append(f"drawtext=text='{clean_title}':fontsize=80:fontcolor=yellow:font='Bebas Neue':"
+        filters.append(f"drawtext=text='{clean_title}':fontsize=80:fontcolor=yellow:font='{script.get("font_name", "Bebas Neue")}':"
                        f"x=(w-text_w)/2:y=h*0.22:enable='between(t,0,1.5)':borderw=8:bordercolor=black:"
                        f"box=1:boxcolor=black@0.5:boxborderw=15")
                        
@@ -139,7 +139,7 @@ def assemble_video(broll_files: list[str], tts_files: list[str], captions_ass: s
             seg4_end = seg4_start + 0.8
             # 3. Rewatch trigger
             filters.append(
-                f"drawtext=text='PAUSE - CATCH THE DETAIL':fontsize=48:fontcolor=yellow:font='Bebas Neue':"
+                f"drawtext=text='PAUSE - CATCH THE DETAIL':fontsize=48:fontcolor=yellow:font='{script.get("font_name", "Bebas Neue")}':"
                 f"x=(w-text_w)/2:y=h*0.15:enable='between(t,{seg4_start:.3f},{seg4_end:.3f})':"
                 f"box=1:boxcolor=black@0.6:boxborderw=10"
             )
