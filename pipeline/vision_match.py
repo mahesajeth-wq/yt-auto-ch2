@@ -33,38 +33,38 @@ def vision_rank_broll(
         return 0, True
 
     # Build the strict matching prompt
-    parts = [{
-        "text": (
-            f'NARRATION (exact sentence for this video segment):\n'
-            f'"{narration}"\n\n'
-            f'SEARCH QUERY used: "{query}"\n\n'
-            f'You are evaluating {len(thumbnails)} candidate B-roll thumbnail(s) '
-            f'(indexed 0 to {len(thumbnails) - 1}) for the above narration.\n\n'
-            f'SCORING RULES — read carefully:\n'
-            f'1. The clip must represent the general subject, device, concept, or process discussed in the narration or search query. '
-            f'Do NOT reject general subject videos (e.g. a washing machine, general engine, or factory) just because they do not depict the specific '
-            f'internal component or microscopic failure mentioned in the narration. A general thematic match of the main subject is highly acceptable (scores 75-90) and far better than falling back to static images.\n'
-            f'2. Score every candidate from 0-100:\n'
-            f'   - 90-100: exact subject or highly specific real-world match\n'
-            f'   - 75-89: strong contextual/thematic match of the main subject\n'
-            f'   - 55-74: usable fallback or generic filler related to the topic\n'
-            f'   - 0-54: bad mismatch or completely unrelated topic\n'
-            f'3. Penalize clips showing:\n'
-            f'   - Generic office workers, handshakes, or people at computers\n'
-            f'   - Abstract light effects, bokeh, or undefined particle animations\n'
-            f'   - A generic human doing an unrelated activity\n'
-            f'   - Any scene that could belong to a completely different video topic\n'
-            f'4. Pick the highest-scoring candidate even when imperfect, so the pipeline can use the best available asset from all providers.\n'
-            f'5. Set match_found=false only when the best candidate scores below 55.\n\n'
-            f'Return ONLY valid JSON (no markdown):\n'
-            f'{{"best_index": <int or null>, '
-            f'"match_found": <bool>, '
-            f'"confidence": <0-100 int>, '
-            f'"candidate_scores": [<0-100 int for each candidate>], '
-            f'"reject_reason": "<why rejected, or empty string if accepted>"}}\n\n'
-            f'Set match_found=true if confidence >= 55. Still explain weaknesses in reject_reason if confidence < 75.'
-        )
-    }]
+    prompt_text = (
+        f"NARRATION (exact sentence for this video segment):\n"
+        f"\"{narration}\"\n\n"
+        f"SEARCH QUERY used: \"{query}\"\n\n"
+        f"You are evaluating {len(thumbnails)} candidate B-roll image(s) (indexed 0 to {len(thumbnails) - 1}) for the above narration.\n"
+        f"Note: Some candidate images may be a horizontal collage showing 3 sequential frames from the same video. Use this sequence to understand the video motion and content.\n\n"
+        f"SCORING RULES — read carefully:\n"
+        f"1. The clip must represent the general subject, device, concept, or process discussed in the narration or search query. "
+        f"Do NOT reject general subject videos (e.g. a washing machine, general engine, or factory) just because they do not depict the specific "
+        f"internal component or microscopic failure mentioned in the narration. A general thematic match of the main subject is highly acceptable (scores 75-90) and far better than falling back to static images.\n"
+        f"2. Score every candidate from 0-100:\n"
+        f"   - 90-100: exact subject or highly specific real-world match\n"
+        f"   - 75-89: strong contextual/thematic match of the main subject\n"
+        f"   - 55-74: usable fallback or generic filler related to the topic\n"
+        f"   - 0-54: bad mismatch or completely unrelated topic\n"
+        f"3. Penalize clips showing:\n"
+        f"   - Generic office workers, handshakes, or people at computers\n"
+        f"   - Abstract light effects, bokeh, or undefined particle animations\n"
+        f"   - A generic human doing an unrelated activity\n"
+        f"   - Any scene that could belong to a completely different video topic\n"
+        f"4. Pick the highest-scoring candidate even when imperfect, so the pipeline can use the best available asset from all providers.\n"
+        f"5. Set match_found=false only when the best candidate scores below 55.\n\n"
+        f"Return ONLY valid JSON (no markdown):\n"
+        f'{{"best_index": <int or null>, '
+        f'"match_found": <bool>, '
+        f'"confidence": <0-100 int>, '
+        f'"candidate_scores": [<0-100 int for each candidate>], '
+        f'"reject_reason": \"<why rejected, or empty string if accepted>\"}}\n\n'
+        f"Set match_found=true if confidence >= 55. Still explain weaknesses in reject_reason if confidence < 75."
+    )
+
+    parts = [{"text": prompt_text}]
 
     for t in thumbnails:
         parts.append({
@@ -110,7 +110,5 @@ def vision_rank_broll(
         return idx, True
 
     except Exception as e:
-        # IMPORTANT: do NOT silently accept on failure.
-        # Return (None, False) so the waterfall continues to the next source.
         print(f"[VisionMatch] Failed/rate-limited: {e}. Continuing waterfall.")
         return None, False

@@ -299,11 +299,7 @@ def generate_music(topic: str, duration_seconds: int = 35) -> str:
     track = np.tile(loop, reps)[: int(duration_seconds * SAMPLE_RATE)]
     # Tick every 0.5s (120 BPM) for high-tension pacing
     tick_interval = int(0.5 * SAMPLE_RATE)
-    if "wedding" in topic.lower() or "marriage" in topic.lower() or "romantic" in topic.lower():
-        # Soft ambient pads only (no shaker, no clock)
-        track = track * 0.4
-    else:
-        track = track + _shaker(len(track), int(chord_dur * SAMPLE_RATE / 2)) + _ticking_clock(len(track), tick_interval)
+    track = track * 0.4
 
 
     track = track / (np.max(np.abs(track)) + 1e-9) * 0.65

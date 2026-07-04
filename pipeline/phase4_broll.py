@@ -304,7 +304,7 @@ def _wikimedia_video_candidate(query: str) -> dict | None:
                 "action": "query",
                 "list": "search",
                 "srnamespace": "6",  # File namespace
-                "srsearch": f"{query} filetype:video",
+                "srsearch": f"{query} filetype:video OR filetype:webm OR filetype:ogv",
                 "format": "json",
                 "srlimit": "3",
             },
@@ -417,7 +417,7 @@ def _wikimedia_video(query: str) -> str | None:
                 "action": "query",
                 "list": "search",
                 "srnamespace": "6",  # File namespace
-                "srsearch": f"{query} filetype:video",
+                "srsearch": f"{query} filetype:video OR filetype:webm OR filetype:ogv",
                 "format": "json",
                 "srlimit": "5",
             },
@@ -569,7 +569,7 @@ def _archive_video(query: str) -> str | None:
             files = r_files.json().get("files", [])
             for f in files:
                 name = f.get("name", "")
-                if name.endswith(".mp4") and int(f.get("size", 0)) > 10_000:
+                if (name.endswith(".mp4") or name.endswith(".webm") or name.endswith(".mkv") or name.endswith(".avi")) and int(f.get("size", 0)) > 10_000:
                     return f"https://archive.org/download/{identifier}/{urllib.parse.quote(name)}"
     except Exception as e:
         print(f"[B-roll] Prelinger filter search failed for '{query}': {e}")
@@ -601,7 +601,7 @@ def _archive_video(query: str) -> str | None:
         files = r_files.json().get("files", [])
         for f in files:
             name = f.get("name", "")
-            if name.endswith(".mp4") and int(f.get("size", 0)) > 10_000:
+            if (name.endswith(".mp4") or name.endswith(".webm") or name.endswith(".mkv") or name.endswith(".avi")) and int(f.get("size", 0)) > 10_000:
                 return f"https://archive.org/download/{identifier}/{urllib.parse.quote(name)}"
         return None
     except Exception as e:
@@ -787,6 +787,68 @@ def _get_video_duration(filepath: str) -> float:
         return 0.0
 
 # ── Master fetch function ────────────────────────────────────────────────────
+
+
+def _extract_collage_to_file(video_path: str, out_path: str) -> bool:
+    try:
+        from PIL import Image
+        import subprocess
+        # Get video duration
+        cmd_dur = [
+            "ffprobe", "-v", "error",
+            "-show_entries", "format=duration",
+            "-of", "default=noprint_wrappers=1:nokey=1",
+            video_path
+        ]
+        duration = float(subprocess.check_output(cmd_dur).decode().strip())
+        if duration <= 0:
+            return False
+            
+        # Extract 3 frames at 20%, 50%, 80%
+        timestamps = [duration * 0.2, duration * 0.5, duration * 0.8]
+        frames = []
+        
+        for idx, ts in enumerate(timestamps):
+            temp_frame = f"{video_path}_collage_f_{idx}.jpg"
+            # Extract frame at ts
+            cmd = [
+                "ffmpeg", "-y", "-ss", f"{ts:.3f}", "-i", video_path,
+                "-vframes", "1", "-f", "image2", temp_frame
+            ]
+            subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            
+            if os.path.exists(temp_frame):
+                try:
+                    img = Image.open(temp_frame).convert("RGB")
+                    # Resize to keep aspect ratio but limit size (e.g. height 240)
+                    img.thumbnail((320, 240))
+                    frames.append((img, temp_frame))
+                except Exception:
+                    if os.path.exists(temp_frame):
+                        os.remove(temp_frame)
+                        
+        if not frames:
+            return False
+            
+        # Stitch frames horizontally
+        widths, heights = zip(*(f[0].size for f in frames))
+        total_width = sum(widths)
+        max_height = max(heights)
+        
+        collage = Image.new('RGB', (total_width, max_height))
+        x_offset = 0
+        for img, path in frames:
+            collage.paste(img, (x_offset, 0))
+            x_offset += img.size[0]
+            # Clean up temp frame
+            os.remove(path)
+            
+        collage.save(out_path, "JPEG", quality=80)
+        return True
+    except Exception as e:
+        print(f"[B-roll] Failed to create collage for {video_path}: {e}")
+        return False
+
 
 def fetch_broll(query: str, format_type: str, segment_index: int, duration: float = 6.0, narration: str = "", alt_queries: list[str] | None = None, used_urls: set[str] | None = None) -> str:
     """
@@ -1029,22 +1091,7 @@ def fetch_broll(query: str, format_type: str, segment_index: int, duration: floa
         
         print(f"[B-roll] Downloading video from {lbl} in parallel...")
         if _download_video_robust(vurl, temp_v, f"{segment_index}_{idx}"):
-            v_dur = _get_video_duration(temp_v)
-            seek = 0.0
-            if v_dur > 20.0:
-                seek = min(10.0, v_dur * 0.15)
-            elif v_dur > 10.0:
-                seek = 2.0
-            elif v_dur > 4.0:
-                seek = 1.0
-                
-            cmd = [
-                "ffmpeg", "-y", "-ss", f"{seek:.3f}", "-i", temp_v,
-                "-vf", "thumbnail=n=30", "-frames:v", "1", temp_f
-            ]
-            import subprocess
-            res = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            if res.returncode == 0 and os.path.exists(temp_f):
+            if _extract_collage_to_file(temp_v, temp_f):
                 with open(temp_f, "rb") as fh:
                     f_data = fh.read()
                 return {

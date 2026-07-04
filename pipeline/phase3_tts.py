@@ -1,7 +1,9 @@
 import os
 import random
-import wave
 import json
+import wave
+import subprocess
+
 from pipeline.config import GEMINI_VOICES, KOKORO_VOICES
 from pipeline.gemini import GeminiClient
 
@@ -25,135 +27,218 @@ def pick_voice(pool: list[str], state_key: str) -> str:
         print(f"Warning: Failed to write voice state: {e}")
     return choice
 
+def get_wav_duration(filepath: str) -> float:
+    with wave.open(filepath, 'rb') as f:
+        frames = f.getnframes()
+        rate = f.getframerate()
+        return frames / float(rate)
+
+def split_combined_audio(combined_path: str, segments: list[dict]):
+    import subprocess
+    # First, try Whisper word alignment
+    try:
+        from faster_whisper import WhisperModel
+        print("[TTS] Loading faster-whisper 'base' model on CPU for segmentation...")
+        model = WhisperModel("base", device="cpu", compute_type="int8", cpu_threads=1, num_workers=1)
+        segments_out, info = model.transcribe(combined_path, word_timestamps=True)
+        
+        whisper_words = []
+        for whisper_seg in segments_out:
+            if whisper_seg.words:
+                for word_info in whisper_seg.words:
+                    w_text = word_info.word.strip()
+                    if w_text:
+                        whisper_words.append({
+                            "text": w_text,
+                            "start": word_info.start,
+                            "end": word_info.end
+                        })
+        
+        # Build script words list and map word indices back to segments
+        script_words = []
+        seg_word_counts = []
+        for seg in segments:
+            words = seg["narration"].split()
+            script_words.extend(words)
+            seg_word_counts.append(len(words))
+            
+        aligned_words = []
+        ns = len(script_words)
+        nw = len(whisper_words)
+        if ns > 0 and nw > 0:
+            w_idx = 0
+            for s_idx, s_word in enumerate(script_words):
+                best_w_idx = w_idx
+                best_score = 0
+                for candidate_idx in range(max(0, w_idx - 2), min(nw, w_idx + 4)):
+                    w_word = whisper_words[candidate_idx]["text"].strip(".,!?\"'()").upper()
+                    s_word_clean = s_word.strip(".,!?\"'()").upper()
+                    if w_word == s_word_clean:
+                        score = 3
+                    elif w_word in s_word_clean or s_word_clean in w_word:
+                        score = 2
+                    else:
+                        score = 0
+                    if score > best_score:
+                        best_score = score
+                        best_w_idx = candidate_idx
+                if best_score > 0:
+                    w_idx = best_w_idx
+                clamped_w_idx = min(max(0, w_idx), nw - 1)
+                aligned_words.append({
+                    "word": s_word,
+                    "start": whisper_words[clamped_w_idx]["start"],
+                    "end": whisper_words[clamped_w_idx]["end"]
+                })
+                w_idx = clamped_w_idx + 1
+        
+        if len(aligned_words) == len(script_words):
+            word_offset = 0
+            total_duration = get_wav_duration(combined_path)
+            
+            for i, seg in enumerate(segments):
+                num_words = seg_word_counts[i]
+                seg_words = aligned_words[word_offset : word_offset + num_words]
+                word_offset += num_words
+                
+                if seg_words:
+                    start_time = seg_words[0]["start"]
+                    end_time = seg_words[-1]["end"]
+                else:
+                    start_time = 0.0
+                    end_time = total_duration
+                    
+                # Clamp boundaries
+                if i == 0:
+                    start_time = 0.0
+                if i == len(segments) - 1:
+                    end_time = total_duration
+                    
+                out_path = f"output/tts_segment_{seg['id']}.wav"
+                print(f"[TTS] Slicing Segment {seg['id']}: {start_time:.3f}s -> {end_time:.3f}s")
+                cmd = [
+                    "ffmpeg", "-y", "-ss", f"{start_time:.3f}", "-to", f"{end_time:.3f}",
+                    "-i", combined_path, out_path
+                ]
+                subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            return
+    except Exception as e:
+        print(f"[TTS] Word alignment split failed: {e}. Falling back to proportional split.")
+        
+    # Proportional split fallback
+    total_duration = get_wav_duration(combined_path)
+    weights = [len(seg["narration"]) for seg in segments]
+    total_weight = sum(weights)
+    
+    current_time = 0.0
+    for i, seg in enumerate(segments):
+        duration = total_duration * (weights[i] / total_weight)
+        end_time = current_time + duration
+        if i == len(segments) - 1:
+            end_time = total_duration
+            
+        out_path = f"output/tts_segment_{seg['id']}.wav"
+        print(f"[TTS] Proportional slicing Segment {seg['id']}: {current_time:.3f}s -> {end_time:.3f}s")
+        cmd = [
+            "ffmpeg", "-y", "-ss", f"{current_time:.3f}", "-to", f"{end_time:.3f}",
+            "-i", combined_path, out_path
+        ]
+        subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        current_time = end_time
+
 def generate_audio(script: dict) -> list[str]:
     """
     Generates TTS for all segments using a SINGLE voice for the whole video.
-    Engine decision: try Gemini first. If any segment fails, redo ALL
-    segments with Kokoro — never mix engines within one video.
-    Inter-video voice rotation is handled by pick_voice() which persists
-    the last-used voice to voice_state.json.
+    To ensure perfect voice tone consistency and prevent shifting depth/pitch,
+    we generate the entire voiceover script as a SINGLE combined audio file, 
+    then split it back into segment files using word-level alignment (Whisper).
     """
     gemini_client = GeminiClient()
     os.makedirs("output", exist_ok=True)
 
-    # Pick one voice per engine — persisted across videos for rotation
     gemini_voice = pick_voice(GEMINI_VOICES, "gemini")
     ko_voice     = pick_voice(KOKORO_VOICES, "kokoro")
 
     segments = script["segments"]
-
-    # ── Pass 1: Try Gemini for ALL segments ──────────────────────────────────
-    print(f"[TTS] Using Gemini voice '{gemini_voice}' for this video.")
-    gemini_results: dict[int, str] = {}   # seg_id → filepath
-    gemini_failed  = False
-
-    for idx, seg in enumerate(segments):
-        seg_id   = seg["id"]
-        out_path = f"output/tts_segment_{seg_id}.wav"
-
-        # Use cached file if valid
-        if os.path.exists(out_path) and os.path.getsize(out_path) > 1000:
-            print(f"[TTS] Segment {seg_id}: cached, skipping.")
-            gemini_results[seg_id] = out_path
-            continue
-
-        try:
-            vocal_tone = script.get("vocal_tone")
-            voiceover_plan = script.get("voiceover_plan")
-            prev_text = segments[idx - 1]["narration"] if idx > 0 else None
-            next_text = segments[idx + 1]["narration"] if idx < len(segments) - 1 else None
-
-            narration_text = seg["narration"]
-            for attempt_idx in range(3):
-                try:
-                    audio_bytes, mime_type = gemini_client.generate_tts(
-                        narration_text,
-                        voice=gemini_voice,
-                        vocal_tone=vocal_tone,
-                        voiceover_plan=voiceover_plan,
-                        prev_text=prev_text,
-                        next_text=next_text,
-                        segment_num=idx + 1,
-                        total_segments=len(segments)
-                    )
-                    break
-                except Exception as tts_err:
-                    if "Safety block" in str(tts_err) and attempt_idx < 2:
-                        print(f"[TTS] Segment {seg_id} safety block detected on: '{narration_text}'")
-                        rephrase_prompt = (
-                            f"Rephrase the following narration text to convey the exact same meaning, "
-                            f"but avoid any words or combinations that could be flagged by sensitive "
-                            f"automated safety filters (e.g. measurements near names, suggestive-sounding abbreviations). "
-                            f"Keep it concise, natural, and easy to read. Output ONLY the rephrased narration text, "
-                            f"no intro, no quotes, no extra words.\n"
-                            f"Original Text: {narration_text}"
-                        )
-                        try:
-                            rephrased = gemini_client.generate_text(rephrase_prompt, temperature=0.3)
-                            rephrased = rephrased.strip().strip('"').strip("'")
-                            if rephrased and rephrased != narration_text:
-                                print(f"[TTS] Rephrased from: '{narration_text}' to: '{rephrased}'")
-                                narration_text = rephrased
-                                seg["narration"] = rephrased
-                                continue
-                        except Exception as rephrase_err:
-                            print(f"[TTS] Rephrase generator failed: {rephrase_err}")
-                    raise tts_err
-
-            if audio_bytes.startswith(b"RIFF") or "wav" in mime_type.lower():
-                with open(out_path, "wb") as wf:
-                    wf.write(audio_bytes)
-            else:
-                import wave
-                with wave.open(out_path, "wb") as wf:
-                    wf.setnchannels(1)
-                    wf.setsampwidth(2)
-                    wf.setframerate(24000)
-                    wf.writeframes(audio_bytes)
-            print(f"[TTS] Segment {seg_id}: Gemini OK.")
-            gemini_results[seg_id] = out_path
-        except Exception as e:
-            print(f"[TTS] Segment {seg_id}: Gemini FAILED — {e}")
-            gemini_failed = True
-            break   # Stop Gemini pass immediately; will redo all with Kokoro
-
-    if not gemini_failed:
-        # All segments succeeded with Gemini — return in order
-        return [gemini_results[seg["id"]] for seg in segments]
-
-    # ── Pass 2: Gemini failed for at least one segment.
-    #    Delete any partial Gemini files and redo ALL segments with Kokoro.
-    #    This guarantees a single consistent voice across the whole video.
-    print(f"[TTS] Gemini failed — switching entire video to Kokoro '{ko_voice}'.")
+    combined_raw_path = "output/tts_combined_raw.wav"
+    
+    # Clean up any previously generated segment files to prevent stale state
     for seg in segments:
         p = f"output/tts_segment_{seg['id']}.wav"
         if os.path.exists(p):
-            os.remove(p)   # remove partial Gemini output
+            try:
+                os.remove(p)
+            except Exception:
+                pass
+
+    # We join segments with a period and newline for natural pauses between sentences
+    full_text = "\n\n".join(seg["narration"] for seg in segments)
+
+    # ── Pass 1: Try Gemini combined ──────────────────────────────────────────
+    print(f"[TTS] Using Gemini voice '{gemini_voice}' for this video.")
+    gemini_failed = False
 
     try:
-        import wave
+        vocal_tone = script.get("vocal_tone")
+        voiceover_plan = script.get("voiceover_plan")
+        
+        audio_bytes, mime_type = gemini_client.generate_tts(
+            full_text,
+            voice=gemini_voice,
+            vocal_tone=vocal_tone,
+            voiceover_plan=voiceover_plan
+        )
+        
+        if audio_bytes.startswith(b"RIFF") or "wav" in mime_type.lower():
+            with open(combined_raw_path, "wb") as wf:
+                wf.write(audio_bytes)
+        else:
+            import wave
+            with wave.open(combined_raw_path, "wb") as wf:
+                wf.setnchannels(1)
+                wf.setsampwidth(2)
+                wf.setframerate(24000)
+                wf.writeframes(audio_bytes)
+        print(f"[TTS] Gemini combined generated successfully.")
+    except Exception as e:
+        print(f"[TTS] Gemini combined failed: {e}")
+        gemini_failed = True
+
+    if not gemini_failed:
+        try:
+            split_combined_audio(combined_raw_path, segments)
+            return [f"output/tts_segment_{seg['id']}.wav" for seg in segments]
+        except Exception as split_err:
+            print(f"[TTS] Split combined audio failed: {split_err}")
+            gemini_failed = True
+
+    # ── Pass 2: Gemini failed combined. Switched to Kokoro combined. ──────────
+    print(f"[TTS] SWITCHING entire video to Kokoro '{ko_voice}'.")
+    if os.path.exists(combined_raw_path):
+        try:
+            os.remove(combined_raw_path)
+        except Exception:
+            pass
+
+    try:
         import numpy as np
         import soundfile as sf
         from kokoro import KPipeline
         pipeline_ko = KPipeline(lang_code="a")
-    except ImportError as e:
-        raise RuntimeError(f"Kokoro not available and Gemini failed: {e}")
-
-    audio_files = []
-    for seg in segments:
-        seg_id   = seg["id"]
-        out_path = f"output/tts_segment_{seg_id}.wav"
-        samples  = []
-        for _, _, audio in pipeline_ko(seg["narration"], voice=ko_voice, speed=1.0):
+        
+        samples = []
+        for _, _, audio in pipeline_ko(full_text, voice=ko_voice, speed=1.0):
             samples.append(audio)
-        audio_np   = np.concatenate(samples)
-        audio_i16  = np.clip(audio_np * 32767, -32768, 32767).astype(np.int16)
-        with wave.open(out_path, "wb") as wf:
+        audio_np = np.concatenate(samples)
+        audio_i16 = np.clip(audio_np * 32767, -32768, 32767).astype(np.int16)
+        
+        with wave.open(combined_raw_path, "wb") as wf:
             wf.setnchannels(1)
             wf.setsampwidth(2)
             wf.setframerate(24000)
             wf.writeframes(audio_i16.tobytes())
-        print(f"[TTS] Segment {seg_id}: Kokoro OK.")
-        audio_files.append(out_path)
-
-    return audio_files
+            
+        split_combined_audio(combined_raw_path, segments)
+        return [f"output/tts_segment_{seg['id']}.wav" for seg in segments]
+    except Exception as ko_err:
+        raise RuntimeError(f"Kokoro combined generation failed: {ko_err}")
