@@ -499,35 +499,68 @@ class GeminiClient:
         
         tone_prompts = {
             "dramatic_whisper": (
-                "You are narrating a late-night documentary. Speak in a low, intimate, "
-                "atmospheric whisper — as if revealing a secret to one person in a dark room. "
-                "Every word should feel heavy with meaning. Pause slightly before key reveals. "
-                "Clear pronunciation, but the energy is restrained and magnetic"
+                "PERSONA: You are a late-night documentary narrator revealing a forbidden secret. "
+                "DELIVERY: Speak in a low, intimate, breathy whisper — close to the microphone, as if telling one person something dangerous. "
+                "Never raise your voice. Your power comes from restraint. "
+                "PACING: Slow. Deliberate. Pause 0.3 seconds before each key word. Let the silence do the work. "
+                "KEY TECHNIQUE: Drop your voice even lower at shocking facts. Let the last word of each sentence trail off softly."
             ),
             "suspenseful_mystery": (
-                "You are narrating a true-crime or unsolved mystery documentary. "
-                "Build tension with your pacing — slow down before the twist, speed up during action. "
-                "Your tone should make the listener lean in. Use dramatic pauses before shocking facts. "
-                "Think of it like whispering a ghost story around a campfire"
+                "PERSONA: You are narrating a true-crime podcast — calm but deeply unsettling. "
+                "DELIVERY: Start each sentence at a measured, almost casual pace, then tighten as tension builds. "
+                "Your voice should feel like a hand slowly gripping the listener's shoulder. "
+                "PACING: Vary speed strategically. Slow WAY down before reveals. Speed up slightly during action beats. "
+                "KEY TECHNIQUE: Insert a half-beat pause before the most shocking word in each sentence. "
+                "Sound like you already know the ending — and it's disturbing."
             ),
             "energetic_storytelling": (
-                "You are an enthusiastic science communicator on stage. Speak with infectious energy, "
-                "genuine excitement, and warmth — like you just discovered something incredible "
-                "and can't wait to share it. Vary your pitch naturally. Emphasize mind-blowing numbers "
-                "and facts with a slight rise in energy. Make the listener feel your passion"
+                "PERSONA: You are a viral science YouTuber who is genuinely mind-blown by what they are about to share. "
+                "DELIVERY: Speak with infectious excitement and warmth. Your voice should make people stop scrolling. "
+                "Natural pitch variation — go up on exciting facts, steady on the explanation. "
+                "PACING: Brisk and punchy. Short sentences get punchy delivery. Numbers and stats get emphasis with a slight vocal punch. "
+                "KEY TECHNIQUE: End hook sentences with a slightly rising, curious tone — like you're asking 'Can you believe this?' without saying it."
             ),
             "deep_curiosity": (
-                "You are a calm, thoughtful narrator exploring a profound mystery of the universe. "
-                "Speak with wonder and reverence — as if standing at the edge of a canyon, "
-                "contemplating something vast. Your pace is measured, your tone is rich and warm. "
-                "Let moments of silence breathe between big ideas"
+                "PERSONA: You are a calm, brilliant scientist narrating a nature documentary about something vast and awe-inspiring. "
+                "DELIVERY: Rich, warm, measured voice. Like Morgan Freeman narrating the cosmos. "
+                "Your tone carries genuine wonder — not hype, but quiet reverence. "
+                "PACING: Unhurried. Let ideas breathe. Slight pause between paragraphs, as if the idea is sinking in. "
+                "KEY TECHNIQUE: Slightly lower and soften your voice on the most profound statements, as if the weight of the idea slows you down."
+            ),
+            "bold_authority": (
+                "PERSONA: You are a confident business journalist delivering a breaking story. Sharp, direct, no-nonsense. "
+                "DELIVERY: Strong, clear, authoritative. Every sentence sounds like a headline. "
+                "No wavering, no softness — but not aggressive. More like a TED speaker who knows exactly what they are talking about. "
+                "PACING: Crisp and punchy. Each sentence lands firmly. Brief pause between facts to let them register. "
+                "KEY TECHNIQUE: Stress the most counterintuitive word in each sentence. Make the listener feel the credibility."
+            ),
+            "warm_storyteller": (
+                "PERSONA: You are a beloved podcast host sharing a fascinating story with a close friend over coffee. "
+                "DELIVERY: Warm, conversational, intimate. Like you know the listener personally. "
+                "Relaxed but engaged — you care about this story and want them to care too. "
+                "PACING: Natural conversational rhythm. Speed up on exciting parts, slow down to emphasize key moments. "
+                "KEY TECHNIQUE: Smile slightly while speaking — this shows in the voice. Sound genuinely delighted by the facts you share."
+            ),
+            "dark_revelation": (
+                "PERSONA: You are exposing a disturbing truth that most people do not know. Serious. Urgent. "
+                "DELIVERY: Low, controlled, serious tone. Not panic — calculated gravity. "
+                "Think of a whistleblower delivering evidence. Every word carries weight. "
+                "PACING: Measured and deliberate. No rushed sentences. Each fact is placed carefully. "
+                "KEY TECHNIQUE: A slight, controlled increase in intensity as you approach the reveal. Then drop to near-silence for the most shocking line."
+            ),
+            "playful_wit": (
+                "PERSONA: You are a clever, slightly sardonic host of a viral facts channel. Entertaining and surprising. "
+                "DELIVERY: Light, bright, with a dry wit. Hint of a smirk. Not silly — clever. "
+                "Like a friend who always has a better story than you at dinner. "
+                "PACING: Quick and snappy. Short sentences get quick punchy reads. Let ironic words land with a tiny beat of silence after them. "
+                "KEY TECHNIQUE: On absurd or ironic facts, let a trace of amused disbelief color your voice — as if even you can't believe this is real."
             ),
         }
         # Validate vocal_tone — if it's not a recognized key, fall back to default
         if vocal_tone and vocal_tone not in tone_prompts:
             print(f"[TTS] Unknown vocal_tone '{vocal_tone}', using default.")
             vocal_tone = None
-        prefix = tone_prompts.get(vocal_tone, "Say this clearly with natural, engaging pacing")
+        prefix = tone_prompts.get(vocal_tone, "Speak with natural warmth and genuine engagement. Vary your pace — slower for big facts, quicker for action beats. Emphasize key words with subtle punch. Sound like a brilliant friend sharing the most interesting thing they learned this week.")
         
         # Build a highly contextual director instructions block
         director_instructions = []

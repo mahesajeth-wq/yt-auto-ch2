@@ -75,7 +75,7 @@ You MUST return your response ONLY as a raw JSON object with no markdown syntax.
 {{
   "title": "A catchy title under 40 chars, starting with a hook word/number and containing one emoji",
   "voiceover_plan": "A 2-3 sentence internal plan detailing the emotional arc of the voiceover. How should the narrator sound? Think step-by-step to plan the performance before writing.",
-  "vocal_tone": "Select the single best vocal delivery style for this topic from: 'dramatic_whisper', 'suspenseful_mystery', 'energetic_storytelling', 'deep_curiosity'",
+  "vocal_tone": "Select the single best vocal delivery style for this topic. Choose EXACTLY ONE from this list: 'dramatic_whisper' (best for secrets, hidden info, suppressed history), 'suspenseful_mystery' (best for crimes, conspiracies, unsolved puzzles), 'energetic_storytelling' (best for science breakthroughs, viral tech, amazing facts), 'deep_curiosity' (best for space, nature, philosophy, the unknown), 'bold_authority' (best for business, finance, economics, power dynamics), 'warm_storyteller' (best for human interest, culture, social stories), 'dark_revelation' (best for scandals, cover-ups, disturbing truths), 'playful_wit' (best for funny/ironic history, absurd facts, counter-intuitive discoveries). Match the tone to the emotional core of the topic.",
   "description": "Line1: restate the hook\nLine2: Fast. Accurate. Mind-blowing.\nLine3: 📲 Follow our socials & links -> {BEACONS_LINK}\n\n#science #didyouknow #facts",
   "tags": ["8 to 12 relevant tags under 500 characters total"],
   "category_id": "27",
@@ -271,7 +271,7 @@ Return ONLY a raw JSON object for this segment with the updated "narration" and 
     # ── Ensure Vocal Tone Variety ─────────────────────────────────────────────
     if "vocal_tone" not in script or not script["vocal_tone"]:
         import random as _rnd
-        vocal_tones = ["dramatic_whisper", "suspenseful_mystery", "energetic_storytelling", "deep_curiosity"]
+        vocal_tones = ["dramatic_whisper", "suspenseful_mystery", "energetic_storytelling", "deep_curiosity", "bold_authority", "warm_storyteller", "dark_revelation", "playful_wit"]
         script["vocal_tone"] = _rnd.choice(vocal_tones)
 
     return script
