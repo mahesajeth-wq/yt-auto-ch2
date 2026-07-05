@@ -70,7 +70,7 @@ def split_combined_audio(combined_path: str, segments: list[dict]):
             for s_idx, s_word in enumerate(script_words):
                 best_w_idx = w_idx
                 best_score = 0
-                for candidate_idx in range(max(0, w_idx - 2), min(nw, w_idx + 4)):
+                for candidate_idx in range(max(0, w_idx - 4), min(nw, w_idx + 15)):
                     w_word = whisper_words[candidate_idx]["text"].strip(".,!?\"'()").upper()
                     s_word_clean = s_word.strip(".,!?\"'()").upper()
                     if w_word == s_word_clean:
