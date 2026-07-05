@@ -96,23 +96,43 @@ def split_combined_audio(combined_path: str, segments: list[dict]):
             word_offset = 0
             total_duration = get_wav_duration(combined_path)
             
+            # 1. Gather raw word starts/ends for each segment
+            seg_bounds = []
             for i, seg in enumerate(segments):
                 num_words = seg_word_counts[i]
                 seg_words = aligned_words[word_offset : word_offset + num_words]
                 word_offset += num_words
                 
                 if seg_words:
-                    start_time = seg_words[0]["start"]
-                    end_time = seg_words[-1]["end"]
+                    seg_bounds.append((seg_words[0]["start"], seg_words[-1]["end"]))
                 else:
-                    start_time = 0.0
-                    end_time = total_duration
+                    # fallback if segment is empty
+                    seg_bounds.append((total_duration, total_duration))
                     
-                # Clamp boundaries
+            # 2. Calculate continuous slice boundaries (midpoints during silences)
+            slice_starts = []
+            slice_ends = []
+            
+            for i in range(len(segments)):
                 if i == 0:
                     start_time = 0.0
+                else:
+                    # Midpoint between previous segment's end and this segment's start
+                    # Prevents cutting off trailing reverb/breath and preserves natural gaps
+                    start_time = (seg_bounds[i-1][1] + seg_bounds[i][0]) / 2.0
+                    
                 if i == len(segments) - 1:
                     end_time = total_duration
+                else:
+                    end_time = (seg_bounds[i][1] + seg_bounds[i+1][0]) / 2.0
+                    
+                slice_starts.append(start_time)
+                slice_ends.append(end_time)
+            
+            # 3. Perform slicing
+            for i, seg in enumerate(segments):
+                start_time = slice_starts[i]
+                end_time = slice_ends[i]
                     
                 out_path = f"output/tts_segment_{seg['id']}.wav"
                 print(f"[TTS] Slicing Segment {seg['id']}: {start_time:.3f}s -> {end_time:.3f}s")
