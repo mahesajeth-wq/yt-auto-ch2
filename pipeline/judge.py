@@ -195,7 +195,11 @@ Please watch the video and evaluate it against these 5 rubrics:
    - Check if the SAME visual clip is repeated or looped twice in different parts of the video. Repeating the same B-roll clip is a critical quality failure.
    - If there is any mismatched topic (like a cityscape for the ocean), symbolic placeholder (except for abstract concepts and scientific abstractions as noted above), or repeated clip, you MUST set status="REJECTED" and score below 80, and list the exact segment numbers that failed.
 2. **Hook Appeal**: Is the hook in the first 3-5 seconds of the video engaging and curiosity-inducing?
-3. **Subtitles/Captions**: Are subtitles present, readable, and matching the narration word-for-word? Note: The video uses modern rapid-fire single-word subtitle style (typical for viral Shorts). This is the EXPECTED and CORRECT behavior. Do not fail the video for displaying one word at a time, as long as it matches what is being spoken.
+3. **Subtitles/Captions (CRITICAL)**: Are subtitles present, readable, and synchronized with the narration?
+   - This video uses modern rapid-fire single-word (karaoke) subtitle style. This is EXPECTED and CORRECT.
+   - REJECT if: subtitles are visibly out of sync (words appearing long after they are spoken, or appearing before), if subtitles get "stuck" on one word while narration moves on, or if subtitles disappear mid-video.
+   - REJECT if: the title hook text card at the start of the video (first 1-2 seconds) has text that goes outside the frame boundaries or is cut off on either side. Text must be fully visible and centered.
+   - ACCEPT if: subtitles are single-word style and appear roughly in sync (within 0.5 seconds of spoken word).
 4. **Music & Audio Quality**: Is the background music clean, and is it mixed correctly without overpowering the voiceover?
 5. **Retention & Loopability**: Does the video contain a retention element (like a rewatch callout in segment 4)? Does it loop back seamlessly from the last segment to the first segment's narration? Note: Segment 5 echoing Segment 1's THEME (not its exact wording) is the desired outcome — flag verbatim repetition of Segment 1's sentence as a script-quality issue.
 

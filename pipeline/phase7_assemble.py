@@ -133,9 +133,29 @@ def assemble_video(broll_files: list[str], tts_files: list[str], captions_ass: s
         font_name = script.get('font_name', 'Bebas Neue')
             
         # 2. Big title hook card (first 1.5s) - Yellow font with premium box padding
-        filters.append(f"drawtext=text='{clean_title}':fontsize=80:fontcolor=yellow:font='{font_name}':"
-                       f"x=(w-text_w)/2:y=h*0.22:enable='between(t,0,1.5)':borderw=8:bordercolor=black:"
-                       f"box=1:boxcolor=black@0.5:boxborderw=15")
+        # Clamp title to max 28 chars per line to prevent overflow, reduce fontsize if very long
+        words = clean_title.split()
+        title_lines = []
+        current_line = ""
+        for word in words:
+            test_line = f"{current_line} {word}".strip() if current_line else word
+            if len(test_line) <= 22:
+                current_line = test_line
+            else:
+                if current_line:
+                    title_lines.append(current_line)
+                current_line = word
+        if current_line:
+            title_lines.append(current_line)
+        
+        # Use smaller font if title is multi-line
+        title_fontsize = 68 if len(title_lines) <= 1 else 52
+        # FFmpeg drawtext uses \n for newlines
+        display_title = "\\n".join(title_lines)
+        
+        filters.append(f"drawtext=text='{display_title}':fontsize={title_fontsize}:fontcolor=yellow:font='{font_name}':"
+                       f"x=(w-text_w)/2:y=h*0.18:enable='between(t,0,1.5)':borderw=6:bordercolor=black:"
+                       f"line_spacing=8:box=1:boxcolor=black@0.5:boxborderw=12")
                        
         if len(durations) >= 4:
             seg4_start = sum(durations[:3])

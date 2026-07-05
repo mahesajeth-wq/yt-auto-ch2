@@ -545,7 +545,13 @@ class GeminiClient:
         instructions_str = "\n".join(director_instructions)
         full_prompt = (
             f"Director Instructions:\n{instructions_str}\n\n"
-            f"Narration text to speak (Speak ONLY the following text with the directed tone, pacing, and smooth transitions): {text}"
+            f"IMPORTANT RULES:\n"
+            f"- Speak ONLY the exact narration text. Do NOT add filler words, intros, or ad libs.\n"
+            f"- Vary your vocal energy — do not speak every sentence at the same flat pace.\n"
+            f"- Emphasize key nouns and numbers naturally (e.g., '400 years', 'NASA', 'breakthrough').\n"
+            f"- Leave a very brief natural breath at the start and end of each paragraph.\n"
+            f"- Keep one consistent voice character throughout. Do NOT shift voice depth mid-sentence.\n\n"
+            f"Narration text to speak:\n{text}"
         )
         
         payload = {
