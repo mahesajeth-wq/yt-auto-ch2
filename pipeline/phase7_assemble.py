@@ -67,35 +67,35 @@ def assemble_video(broll_files: list[str], tts_files: list[str], captions_ass: s
             vf_chain = (
                 f"scale=trunc({w}*1.15/2)*2:trunc({h}*1.15/2)*2:force_original_aspect_ratio=increase,"
                 f"crop={w}/(1+0.02*t):{h}/(1+0.02*t),scale={w}:{h},"
-                f"eq=contrast=1.05:saturation=1.1:gamma=0.95,setsar=1"
+                f"eq=contrast=1.05:saturation=1.1:gamma=0.95,vignette=PI/7,setsar=1"
             )
         elif motion_idx == 1:
             # 2. Slow Panning Upward
             vf_chain = (
                 f"scale=trunc({w}*1.15/2)*2:trunc({h}*1.15/2)*2:force_original_aspect_ratio=increase,"
                 f"crop={w}:{h}:'(in_w-out_w)/2':'(in_h-out_h)/2 + (t-{duration}/2)*22',"
-                f"eq=contrast=1.05:saturation=1.1:gamma=0.95,setsar=1"
+                f"eq=contrast=1.05:saturation=1.1:gamma=0.95,vignette=PI/7,setsar=1"
             )
         elif motion_idx == 2:
             # 3. Slow Panning Downward
             vf_chain = (
                 f"scale=trunc({w}*1.15/2)*2:trunc({h}*1.15/2)*2:force_original_aspect_ratio=increase,"
                 f"crop={w}:{h}:'(in_w-out_w)/2':'(in_h-out_h)/2 - (t-{duration}/2)*22',"
-                f"eq=contrast=1.05:saturation=1.1:gamma=0.95,setsar=1"
+                f"eq=contrast=1.05:saturation=1.1:gamma=0.95,vignette=PI/7,setsar=1"
             )
         elif motion_idx == 3:
             # 4. Slow Panning Right
             vf_chain = (
                 f"scale=trunc({w}*1.15/2)*2:trunc({h}*1.15/2)*2:force_original_aspect_ratio=increase,"
                 f"crop={w}:{h}:'(in_w-out_w)/2 + (t-{duration}/2)*22':'(in_h-out_h)/2',"
-                f"eq=contrast=1.05:saturation=1.1:gamma=0.95,setsar=1"
+                f"eq=contrast=1.05:saturation=1.1:gamma=0.95,vignette=PI/7,setsar=1"
             )
         else:
             # 5. Slow Panning Left
             vf_chain = (
                 f"scale=trunc({w}*1.15/2)*2:trunc({h}*1.15/2)*2:force_original_aspect_ratio=increase,"
                 f"crop={w}:{h}:'(in_w-out_w)/2 - (t-{duration}/2)*22':'(in_h-out_h)/2',"
-                f"eq=contrast=1.05:saturation=1.1:gamma=0.95,setsar=1"
+                f"eq=contrast=1.05:saturation=1.1:gamma=0.95,vignette=PI/7,setsar=1"
             )
             
         cmd = [
@@ -239,9 +239,12 @@ def assemble_video(broll_files: list[str], tts_files: list[str], captions_ass: s
 
     filter_complex = (
         "[1:a]volume=2.0[tts];"
-        "[2:a]volume=0.12,aloop=loop=-1:size=2147483647[music_loop];"
+        # We increase baseline music volume since it will be auto-ducked during speech
+        "[2:a]volume=0.25,aloop=loop=-1:size=2147483647[music_loop];"
         "[3:a]volume=0.35[sfx];"
-        "[tts][music_loop]amix=inputs=2:duration=first:normalize=0[mixed];"
+        # sidechaincompress: ducks the music loop [music_loop] using the voiceover [tts] as trigger
+        "[music_loop][tts]sidechaincompress=threshold=0.15:ratio=4:attack=50:release=300[music_ducked];"
+        "[tts][music_ducked]amix=inputs=2:duration=first:normalize=0[mixed];"
         "[mixed][sfx]amix=inputs=2:duration=first:normalize=0[premix];"
         "[premix]loudnorm=I=-14:TP=-1.5:LRA=11[audio_final]"
     )
