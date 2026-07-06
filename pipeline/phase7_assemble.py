@@ -238,13 +238,13 @@ def assemble_video(broll_files: list[str], tts_files: list[str], captions_ass: s
     final_output_path = f"output/final_{format_type}.mp4"
 
     filter_complex = (
-        "[1:a]volume=2.0[tts];"
+        "[1:a]volume=2.0,asplit=2[tts1][tts2];"
         # We increase baseline music volume since it will be auto-ducked during speech
         "[2:a]volume=0.25,aloop=loop=-1:size=2147483647[music_loop];"
         "[3:a]volume=0.35[sfx];"
-        # sidechaincompress: ducks the music loop [music_loop] using the voiceover [tts] as trigger
-        "[music_loop][tts]sidechaincompress=threshold=0.15:ratio=4:attack=50:release=300[music_ducked];"
-        "[tts][music_ducked]amix=inputs=2:duration=first:normalize=0[mixed];"
+        # sidechaincompress: ducks the music loop [music_loop] using the voiceover [tts1] as trigger
+        "[music_loop][tts1]sidechaincompress=threshold=0.15:ratio=4:attack=50:release=300[music_ducked];"
+        "[tts2][music_ducked]amix=inputs=2:duration=first:normalize=0[mixed];"
         "[mixed][sfx]amix=inputs=2:duration=first:normalize=0[premix];"
         "[premix]loudnorm=I=-14:TP=-1.5:LRA=11[audio_final]"
     )
