@@ -1,12 +1,12 @@
 {
   "0": {
-    "cooldown_until": 1783324800.0,
-    "failures": 5,
+    "cooldown_until": 1783411200.0,
+    "failures": 4,
     "status": "daily_exhausted"
   },
   "1": {
-    "cooldown_until": 1783324800.0,
-    "failures": 4,
+    "cooldown_until": 1783411200.0,
+    "failures": 5,
     "status": "daily_exhausted"
   },
   "2": {
