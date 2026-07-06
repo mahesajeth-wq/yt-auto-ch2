@@ -63,10 +63,10 @@ def assemble_video(broll_files: list[str], tts_files: list[str], captions_ass: s
         
         # Base scale-crop to cover full bleed (no ugly black letterbox margins)
         if motion_idx == 0:
-            # 1. Slow Cinematic Zoom In
+            # 1. Slow Cinematic Diagonal Pan Up-Right (Safe constant crop dimensions)
             vf_chain = (
                 f"scale=trunc({w}*1.15/2)*2:trunc({h}*1.15/2)*2:force_original_aspect_ratio=increase,"
-                f"crop={w}/(1+0.02*t):{h}/(1+0.02*t),scale={w}:{h},"
+                f"crop={w}:{h}:'(in_w-out_w)/2 + (t-{duration}/2)*15':'(in_h-out_h)/2 + (t-{duration}/2)*15',"
                 f"eq=contrast=1.05:saturation=1.1:gamma=0.95,vignette=PI/7,setsar=1"
             )
         elif motion_idx == 1:
