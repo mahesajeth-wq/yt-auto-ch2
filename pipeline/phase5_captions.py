@@ -169,15 +169,28 @@ def generate_captions(audio_files: list[str], script: dict, format_type: str = "
                 start_win = max(0, idx - 1)
                 end_win = min(len(aligned_words), idx + 2)
                 
+                # Dynamic bounce/pop animation timings in ms based on word duration
+                word_dur_ms = int((word_info["end"] - word_info["start"]) * 1000)
+                pop_end = min(70, int(word_dur_ms * 0.45))
+                settle_end = min(150, word_dur_ms)
+                
                 styled_parts = []
                 for w_idx in range(start_win, end_win):
                     curr_word = aligned_words[w_idx]["word"]
                     curr_word_clean = curr_word.strip(".,!?\"'()").upper()
                     if w_idx == idx:
                         if curr_word_clean in POWER_WORDS:
-                            styled_parts.append(f"{{\\c&H0033FF33&\\fscx115\\fscy115}}{curr_word.upper()}{{\\r}}")
+                            # Elastic pop to 122% then settle to 100% scale in Neon Green
+                            styled_parts.append(
+                                f"{{\\fscx90\\fscy90\\t(0,{pop_end},1.2,\\fscx122\\fscy122)"
+                                f"\\t({pop_end},{settle_end},1,\\fscx100\\fscy100)\\c&H0033FF33&}}{curr_word.upper()}{{\\r}}"
+                            )
                         else:
-                            styled_parts.append(f"{{\\c&H0000E5FF&\\fscx110\\fscy110}}{curr_word.upper()}{{\\r}}")
+                            # Elastic pop to 112% then settle to 100% scale in Yellow-Orange
+                            styled_parts.append(
+                                f"{{\\fscx90\\fscy90\\t(0,{pop_end},1.2,\\fscx112\\fscy112)"
+                                f"\\t({pop_end},{settle_end},1,\\fscx100\\fscy100)\\c&H0000E5FF&}}{curr_word.upper()}{{\\r}}"
+                            )
                     else:
                         styled_parts.append(f"{{\\c&HFFFFFF&}}{curr_word.upper()}{{\\r}}")
                         

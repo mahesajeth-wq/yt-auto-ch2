@@ -299,7 +299,8 @@ def generate_music(topic: str, duration_seconds: int = 35) -> str:
     track = np.tile(loop, reps)[: int(duration_seconds * SAMPLE_RATE)]
     # Tick every 0.5s (120 BPM) for high-tension pacing
     tick_interval = int(0.5 * SAMPLE_RATE)
-    track = track * 0.4
+    clock_ticks = _ticking_clock(len(track), tick_interval)
+    track = track * 0.45 + clock_ticks
 
 
     track = track / (np.max(np.abs(track)) + 1e-9) * 0.65

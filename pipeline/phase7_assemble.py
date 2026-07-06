@@ -56,9 +56,51 @@ def assemble_video(broll_files: list[str], tts_files: list[str], captions_ass: s
             ss_offset = max(0.0, total_dur - duration)
             
         print(f"Normalizing segment {i} B-roll to duration {duration:.3f}s (offset: {ss_offset:.3f}s, total: {total_dur:.3f}s)...")
+        
+        # Select randomized cinematic camera motion (Ken Burns / Pan / Zoom)
+        import random as _rnd
+        motion_idx = _rnd.randint(0, 4)
+        
+        # Base scale-crop to cover full bleed (no ugly black letterbox margins)
+        if motion_idx == 0:
+            # 1. Slow Cinematic Zoom In
+            vf_chain = (
+                f"scale=trunc({w}*1.15/2)*2:trunc({h}*1.15/2)*2:force_original_aspect_ratio=increase,"
+                f"crop={w}/(1+0.02*t):{h}/(1+0.02*t),scale={w}:{h},"
+                f"eq=contrast=1.05:saturation=1.1:gamma=0.95,setsar=1"
+            )
+        elif motion_idx == 1:
+            # 2. Slow Panning Upward
+            vf_chain = (
+                f"scale=trunc({w}*1.15/2)*2:trunc({h}*1.15/2)*2:force_original_aspect_ratio=increase,"
+                f"crop={w}:{h}:'(in_w-out_w)/2':'(in_h-out_h)/2 + (t-{duration}/2)*22',"
+                f"eq=contrast=1.05:saturation=1.1:gamma=0.95,setsar=1"
+            )
+        elif motion_idx == 2:
+            # 3. Slow Panning Downward
+            vf_chain = (
+                f"scale=trunc({w}*1.15/2)*2:trunc({h}*1.15/2)*2:force_original_aspect_ratio=increase,"
+                f"crop={w}:{h}:'(in_w-out_w)/2':'(in_h-out_h)/2 - (t-{duration}/2)*22',"
+                f"eq=contrast=1.05:saturation=1.1:gamma=0.95,setsar=1"
+            )
+        elif motion_idx == 3:
+            # 4. Slow Panning Right
+            vf_chain = (
+                f"scale=trunc({w}*1.15/2)*2:trunc({h}*1.15/2)*2:force_original_aspect_ratio=increase,"
+                f"crop={w}:{h}:'(in_w-out_w)/2 + (t-{duration}/2)*22':'(in_h-out_h)/2',"
+                f"eq=contrast=1.05:saturation=1.1:gamma=0.95,setsar=1"
+            )
+        else:
+            # 5. Slow Panning Left
+            vf_chain = (
+                f"scale=trunc({w}*1.15/2)*2:trunc({h}*1.15/2)*2:force_original_aspect_ratio=increase,"
+                f"crop={w}:{h}:'(in_w-out_w)/2 - (t-{duration}/2)*22':'(in_h-out_h)/2',"
+                f"eq=contrast=1.05:saturation=1.1:gamma=0.95,setsar=1"
+            )
+            
         cmd = [
             "ffmpeg", "-y", "-ss", f"{ss_offset:.3f}", "-stream_loop", "-1", "-i", broll_path, "-t", f"{duration:.3f}",
-            "-vf", f"scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,eq=contrast=1.05:saturation=1.1:gamma=0.95,setsar=1",
+            "-vf", vf_chain,
             "-r", "30", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-an", norm_path
         ]
         subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
