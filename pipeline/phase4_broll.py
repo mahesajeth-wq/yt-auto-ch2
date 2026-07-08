@@ -4,12 +4,20 @@ import requests
 import urllib.parse
 import subprocess
 import time
-from pipeline.config import PEXELS_API_KEY, PIXABAY_API_KEY, COVERR_API_KEY, NASA_API_KEY, KLIPY_API_KEY, NASA_BROLL_ENABLED
+import json
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from pipeline.config import PEXELS_API_KEY, PIXABAY_API_KEY, COVERR_API_KEY, NASA_API_KEY, KLIPY_API_KEY, NASA_BROLL_ENABLED, GEMINI_API_BASE, GEMINI_FLASH
 
 
 
 def _nasa_params(query: str, media_type: str, page_size: int) -> dict:
-    return {"q": query, "media_type": media_type, "page_size": page_size}
+    return {
+        "q": query,
+        "media_type": media_type,
+        "page_size": page_size,
+        "keywords": query,
+        "year_start": "2010"
+    }
 
 
 def _walk_urls(obj) -> list[str]:
@@ -90,7 +98,12 @@ def _pexels_candidates(query: str, orientation: str, n: int = 8) -> list[dict]:
         r = requests.get(
             "https://api.pexels.com/videos/search",
             headers={"Authorization": PEXELS_API_KEY},
-            params={"query": query, "per_page": n, "orientation": orientation},
+            params={
+                "query": query,
+                "per_page": min(80, max(n * 3, 15)),
+                "orientation": orientation,
+                "size": "medium",
+            },
             timeout=30,
         )
         r.raise_for_status()
@@ -120,7 +133,14 @@ def _pixabay_video(query: str) -> str | None:
     try:
         r = requests.get(
             "https://pixabay.com/api/videos/",
-            params={"key": PIXABAY_API_KEY, "q": query, "per_page": 3},
+            params={
+                "key": PIXABAY_API_KEY,
+                "q": query,
+                "per_page": min(50, max(3 * 3, 10)),
+                "order": "popular",
+                "safesearch": "true",
+                "min_width": 1920
+            },
             timeout=30,
         )
         r.raise_for_status()
@@ -210,7 +230,14 @@ def _pixabay_candidates(query: str, n: int = 3) -> list[dict]:
     try:
         r = requests.get(
             "https://pixabay.com/api/videos/",
-            params={"key": PIXABAY_API_KEY, "q": query, "per_page": max(3, n)},
+            params={
+                "key": PIXABAY_API_KEY,
+                "q": query,
+                "per_page": min(50, max(n * 3, 10)),
+                "order": "popular",
+                "safesearch": "true",
+                "min_width": 1920
+            },
             timeout=30,
         )
         r.raise_for_status()
@@ -245,7 +272,7 @@ def _nasa_video_candidate(query: str) -> dict | None:
     try:
         r = requests.get(
             "https://images-api.nasa.gov/search",
-            params=_nasa_params(query, "video", 3),
+            params=_nasa_params(query, "video", 20),
             headers={"User-Agent": "yt-auto/1.0"},
             timeout=20,
         )
@@ -459,21 +486,30 @@ def _dvids_candidates(query: str, n: int = 3) -> list[dict]:
     try:
         r = requests.get(
             "https://www.dvidshub.net/api/search",
-            params={"query": query, "type": "video",
-                    "rows": n * 2, "output": "json"},
-            headers={"User-Agent": "Mozilla/5.0"},
+            params={"query": query, "type": "video", "rows": n * 3, "output": "json"},
+            headers={"User-Agent": "Mozilla/5.0 (compatible; yt-auto/1.0)"},
             timeout=20,
         )
         r.raise_for_status()
+        results = r.json().get("results", [])
         out = []
-        for item in r.json().get("results", []):
+        for item in results:
             v = item.get("download_url") or item.get("file_url")
             t = item.get("thumbnail_url") or item.get("image_url")
+            title = item.get("title", "")
+            id_val = item.get("id")
             if v and t:
-                out.append({"video_url": v, "thumb_url": t, "source": "DVIDS"})
+                out.append({
+                    "video_url": v,
+                    "thumb_url": t,
+                    "source": "DVIDS",
+                    "title": title,
+                    "id": id_val,
+                    "width": 1920
+                })
         return out[:n]
     except Exception as e:
-        print(f"[B-roll] DVIDS failed: {e}")
+        print(f"[B-roll] DVIDS search failed for '{query}': {e}")
         return []
 
 def _dvids_video(query: str) -> str | None:
@@ -484,19 +520,110 @@ def _openverse_image(query: str) -> str | None:
     try:
         r = requests.get(
             "https://api.openverse.org/v1/images/",
-            params={"q": query, "license": "cc0,by",
-                    "page_size": 5, "format": "json"},
-            headers={"User-Agent": "Mozilla/5.0"},
+            params={"q": query, "license": "cc0,by", "page_size": 5, "orientation": "landscape"},
+            headers={"User-Agent": "yt-auto/1.0"},
             timeout=15,
         )
         r.raise_for_status()
         results = r.json().get("results", [])
         if not results:
             return None
-        return random.choice(results[:3]).get("url")
+        chosen = random.choice(results[:3])
+        return chosen.get("url")
     except Exception as e:
-        print(f"[B-roll] Openverse failed: {e}")
+        print(f"[B-roll] Openverse image search failed for '{query}': {e}")
         return None
+
+def _archive_candidates(query: str, n: int = 3) -> list[dict]:
+    import urllib.parse
+    headers = {"User-Agent": "yt-auto/1.0 (educational-pipeline)"}
+    candidates = []
+
+    try:
+        r = requests.get(
+            "https://archive.org/advancedsearch.php",
+            params={
+                "q": f"collection:prelinger AND ({query})",
+                "fl[]": ["identifier", "title", "downloads"],
+                "sort[]": "downloads desc",
+                "rows": n * 4,
+                "output": "json"
+            },
+            headers=headers,
+            timeout=20
+        )
+        r.raise_for_status()
+        docs = r.json().get("response", {}).get("docs", [])
+    except Exception as e:
+        print(f"[B-roll] Archive Prelinger search failed for '{query}': {e}")
+        docs = []
+
+    if not docs:
+        try:
+            r = requests.get(
+                "https://archive.org/advancedsearch.php",
+                params={
+                    "q": f"({query}) AND mediatype:movies",
+                    "fl[]": ["identifier", "title", "downloads"],
+                    "sort[]": "downloads desc",
+                    "rows": n * 4,
+                    "output": "json"
+                },
+                headers=headers,
+                timeout=20
+            )
+            r.raise_for_status()
+            docs = r.json().get("response", {}).get("docs", [])
+        except Exception as e:
+            print(f"[B-roll] Archive broader search failed for '{query}': {e}")
+            docs = []
+
+    for doc in docs:
+        if len(candidates) >= n:
+            break
+        identifier = doc.get("identifier")
+        title = doc.get("title", "")
+        if not identifier:
+            continue
+        try:
+            r_files = requests.get(
+                f"https://archive.org/metadata/{urllib.parse.quote(identifier)}",
+                headers=headers,
+                timeout=15
+            )
+            r_files.raise_for_status()
+            files = r_files.json().get("files", [])
+            
+            video_url = None
+            for f in files:
+                name = f.get("name", "")
+                if (name.endswith(".mp4") or name.endswith(".webm") or name.endswith(".mkv") or name.endswith(".avi")) and int(f.get("size", 0)) > 10_000:
+                    video_url = f"https://archive.org/download/{identifier}/{urllib.parse.quote(name)}"
+                    break
+            
+            if not video_url:
+                continue
+                
+            thumb_url = None
+            for f in files:
+                name = f.get("name", "")
+                if name.endswith("__ia_thumb.jpg") or name.lower().endswith((".jpg", ".png", ".jpeg")):
+                    thumb_url = f"https://archive.org/download/{identifier}/{urllib.parse.quote(name)}"
+                    break
+            if not thumb_url:
+                thumb_url = f"https://archive.org/services/img/{identifier}"
+                
+            candidates.append({
+                "video_url": video_url,
+                "thumb_url": thumb_url,
+                "source": "Archive",
+                "title": title,
+                "id": identifier
+            })
+        except Exception as e:
+            print(f"[B-roll] Archive metadata fetch failed for '{identifier}': {e}")
+            
+    return candidates
 
 
 def _nasa_video(query: str) -> str | None:
@@ -850,7 +977,121 @@ def _extract_collage_to_file(video_path: str, out_path: str) -> bool:
         return False
 
 
-def fetch_broll(query: str, format_type: str, segment_index: int, duration: float = 6.0, narration: str = "", alt_queries: list[str] | None = None, used_urls: set[str] | None = None) -> str:
+def _expand_query(query: str, channel: str, n: int = 5) -> list[str]:
+    from pipeline.gemini import _post_with_rotation
+    from pipeline.config import GEMINI_API_BASE, GEMINI_FLASH
+    try:
+        prompt_text = (
+            f"You are a video search expert. Topic: '{query}'. Channel: {channel}.\n"
+            f"Generate {n} SHORT search queries (2-4 words) to find relevant b-roll footage.\n"
+            f"Think: synonyms, visual angles, related concepts, settings.\n"
+            f"Return ONLY a JSON array of strings."
+        )
+        url = f"{GEMINI_API_BASE}/models/{GEMINI_FLASH}:generateContent?key={{key}}"
+        payload = {
+            "contents": [{"role": "user", "parts": [{"text": prompt_text}]}],
+            "generationConfig": {
+                "temperature": 0.7,
+                "responseMimeType": "application/json",
+            },
+        }
+        resp = _post_with_rotation(url, payload, timeout=30)
+        raw = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+        items = json.loads(raw)
+        if isinstance(items, list):
+            res = []
+            for item in items:
+                if isinstance(item, str):
+                    s = item.strip()
+                    if s and s.lower() != query.lower():
+                        res.append(s)
+            seen = set()
+            deduped = []
+            for item in res:
+                if item.lower() not in seen:
+                    seen.add(item.lower())
+                    deduped.append(item)
+            return deduped
+        return []
+    except Exception:
+        return []
+
+
+def _score_candidate(item: dict, query: str, target_duration: float = 8.0) -> float:
+    text_to_check = ""
+    for field in ["title", "tags", "video_url", "thumb_url"]:
+        val = item.get(field)
+        if isinstance(val, str):
+            text_to_check += " " + val
+        elif isinstance(val, list):
+            text_to_check += " " + " ".join(str(v) for v in val)
+            
+    query_words = [w.strip(",.?!:;-()\"'").lower() for w in query.split()]
+    query_words = [w for w in query_words if len(w) > 2]
+    if not query_words:
+        query_words = [w.strip(",.?!:;-()\"'").lower() for w in query.split() if w]
+        
+    overlap_score = 0.0
+    if query_words:
+        matches = sum(1 for w in query_words if w in text_to_check.lower())
+        overlap_score = (matches / len(query_words)) * 30.0
+        
+    width = item.get("width")
+    height = item.get("height")
+    res_score = 5.0
+    url_str = str(item.get("video_url", "")).lower()
+    
+    if isinstance(width, (int, float)) and width > 0:
+        if width >= 3840:
+            res_score = 25.0
+        elif width >= 1920:
+            res_score = 20.0
+        elif width >= 1280:
+            res_score = 10.0
+        else:
+            res_score = 5.0
+    elif isinstance(height, (int, float)) and height > 0:
+        if height >= 2160:
+            res_score = 25.0
+        elif height >= 1080:
+            res_score = 20.0
+        elif height >= 720:
+            res_score = 10.0
+        else:
+            res_score = 5.0
+    else:
+        if "4k" in url_str or "2160p" in url_str:
+            res_score = 25.0
+        elif "1080p" in url_str or "1920" in url_str or "hd" in url_str:
+            res_score = 20.0
+        elif "720p" in url_str or "1280" in url_str:
+            res_score = 10.0
+        else:
+            res_score = 5.0
+            
+    dur_score = 10.0
+    item_dur = item.get("duration")
+    if isinstance(item_dur, (int, float)) and item_dur > 0:
+        diff = abs(item_dur - target_duration)
+        dur_score = max(0.0, 20.0 - 2.0 * diff)
+        
+    source_weights = {
+        "nasa": 20.0,
+        "dvids": 18.0,
+        "wikimedia": 16.0,
+        "archive": 14.0,
+        "coverr": 18.0,
+        "pexels": 15.0,
+        "pixabay": 14.0,
+        "klipy": 8.0
+    }
+    source_lower = str(item.get("source", "")).lower()
+    source_score = source_weights.get(source_lower, 10.0)
+    
+    return float(overlap_score + res_score + dur_score + source_score)
+
+
+def fetch_broll(query: str, format_type: str, segment_index: int, duration: float = 6.0, narration: str = "", alt_queries: list[str] | None = None, used_urls: set[str] | None = None, channel: str = "general") -> str:
     """
     Unified B-roll candidate ranking across multiple platforms (Coverr, Pexels, Pixabay, NASA, Wikimedia)
     using Gemini Vision matching and URL de-duplication.
@@ -891,87 +1132,115 @@ def fetch_broll(query: str, format_type: str, segment_index: int, duration: floa
         if general_fallback not in queries_to_try:
             queries_to_try.append(general_fallback)
 
-    # Gather candidate video metadata from ALL platforms
+    if not budget_exceeded():
+        expanded = _expand_query(query, channel=channel, n=5)
+        queries_to_try.extend(expanded)
+
+    # Deduplicate final query list (case-insensitive while preserving order)
+    seen_q = set()
+    queries_to_try_dedup = []
+    for q in queries_to_try:
+        if q.lower() not in seen_q:
+            seen_q.add(q.lower())
+            queries_to_try_dedup.append(q)
+    queries_to_try = queries_to_try_dedup
+
+    # Gather candidate video metadata from platforms in parallel
     candidates = []
-    
-    # 1. Fetch NASA video candidate if science/space query
-    is_science = any(k in query.lower() for k in ["space", "nasa", "star", "planet", "galaxy", "orbit", "telescope", "asteroid", "science", "physics", "chemical", "atom", "molecule", "earth", "moon", "sun", "nebula", "black hole"])
-    if is_science and NASA_BROLL_ENABLED:
-        for q in queries_to_try:
-            if budget_exceeded():
-                break
-            print(f"[B-roll] Segment {segment_index}: checking NASA video for '{q}'…")
-            nasa_cand = _nasa_video_candidate(q)
-            if nasa_cand:
-                candidates.append(nasa_cand)
-                if len(candidates) >= 2:
-                    break
 
-    # 2. Fetch Wikimedia video candidate
-    for q in queries_to_try:
-        if budget_exceeded():
-            break
-        print(f"[B-roll] Segment {segment_index}: checking Wikimedia video for '{q}'…")
-        wiki_cand = _wikimedia_video_candidate(q)
-        if wiki_cand:
-            candidates.append(wiki_cand)
-            if len(candidates) >= 2:
-                break
+    CHANNEL_SOURCE_PRIORITY = {
+        "science":     ["nasa", "dvids", "wikimedia", "coverr", "archive", "pexels", "pixabay"],
+        "nature":      ["pexels", "pixabay", "coverr", "wikimedia", "archive"],
+        "mystery":     ["archive", "wikimedia", "coverr", "pexels", "pixabay"],
+        "engineering": ["nasa", "dvids", "coverr", "wikimedia", "pexels", "archive"],
+        "business":    ["coverr", "pexels", "pixabay", "klipy"],
+        "general":     ["coverr", "pexels", "pixabay", "nasa", "wikimedia", "archive", "dvids"],
+    }
 
-    # 2.5 Fetch DVIDS video candidates (up to 2)
-    for q in queries_to_try:
-        if budget_exceeded():
-            break
-        print(f"[B-roll] Segment {segment_index}: checking DVIDS video for '{q}'…")
-        d_cands = _dvids_candidates(q, n=2)
-        if d_cands:
-            candidates.extend(d_cands)
-            if len(candidates) >= 3:
-                break
+    def run_source_query(source: str, q: str) -> list[dict]:
+        try:
+            if source == "nasa":
+                if not NASA_BROLL_ENABLED:
+                    return []
+                cand = _nasa_video_candidate(q)
+                return [cand] if cand else []
+            elif source == "wikimedia":
+                cand = _wikimedia_video_candidate(q)
+                return [cand] if cand else []
+            elif source == "dvids":
+                return _dvids_candidates(q, n=3)
+            elif source == "coverr":
+                if not COVERR_API_KEY:
+                    return []
+                return _coverr_candidates(q, orientation, n=2)
+            elif source == "klipy":
+                if not KLIPY_API_KEY:
+                    return []
+                return _klipy_candidates(q, n=2)
+            elif source == "pexels":
+                if not PEXELS_API_KEY:
+                    return []
+                return _pexels_candidates(q, orientation, n=2)
+            elif source == "pixabay":
+                if not PIXABAY_API_KEY:
+                    return []
+                return _pixabay_candidates(q, n=2)
+            elif source == "archive":
+                return _archive_candidates(q, n=3)
+        except Exception as e:
+            print(f"[B-roll] Source {source} query '{q}' failed: {e}")
+        return []
 
-    # 3. Fetch Coverr candidates (up to 2)
-    if COVERR_API_KEY:
-        for q in queries_to_try:
-            if budget_exceeded():
-                break
-            c_cands = _coverr_candidates(q, orientation, n=2)
-            if c_cands:
-                candidates.extend(c_cands)
-                if len(candidates) >= 4:
-                    break
+    sources = CHANNEL_SOURCE_PRIORITY.get(channel, CHANNEL_SOURCE_PRIORITY["general"])
+    tasks = []
+    for source in sources:
+        for q in queries_to_try[:3]:
+            tasks.append((source, q))
 
-    # 4. Fetch Klipy GIF/meme candidates (converted to MP4 if selected)
-    if KLIPY_API_KEY:
-        for q in queries_to_try:
-            if budget_exceeded():
-                break
-            k_cands = _klipy_candidates(q, n=2)
-            if k_cands:
-                candidates.extend(k_cands)
-                if len(candidates) >= 4:
-                    break
+    seen_gathering = set()
+    source_counts = {src: 0 for src in sources}
 
-    # 5. Fetch Pexels candidates (up to 2)
-    if PEXELS_API_KEY:
-        for q in queries_to_try:
-            if budget_exceeded():
-                break
-            p_cands = _pexels_candidates(q, orientation, n=2)
-            if p_cands:
-                candidates.extend(p_cands)
-                if len(candidates) >= 4:
-                    break
+    remaining_budget = max(1.0, deadline - time.monotonic())
+    timeout = min(45, int(remaining_budget * 0.5))
+    if timeout < 1:
+        timeout = 1
 
-    # 6. Fetch Pixabay candidates (up to 2)
-    if PIXABAY_API_KEY:
-        for q in queries_to_try:
-            if budget_exceeded():
-                break
-            px_cands = _pixabay_candidates(q, n=2)
-            if px_cands:
-                candidates.extend(px_cands)
-                if len(candidates) >= 4:
-                    break
+    print(f"[B-roll] Segment {segment_index}: starting parallel candidate gathering with timeout={timeout}s for sources: {sources}...")
+
+    with ThreadPoolExecutor(max_workers=min(12, len(tasks))) as executor:
+        future_to_info = {}
+        for source, q in tasks:
+            f = executor.submit(run_source_query, source, q)
+            future_to_info[f] = (source, q)
+
+        try:
+            for future in as_completed(future_to_info.keys(), timeout=timeout):
+                source, q = future_to_info[future]
+                try:
+                    res = future.result()
+                    if res:
+                        added_count = 0
+                        for cand in res:
+                            if not isinstance(cand, dict):
+                                continue
+                            v_url = cand.get("video_url")
+                            if v_url and v_url not in seen_gathering:
+                                seen_gathering.add(v_url)
+                                if "source" not in cand:
+                                    cand["source"] = source
+                                candidates.append(cand)
+                                added_count += 1
+                        source_counts[source] += added_count
+                except Exception as e:
+                    print(f"[B-roll] Future failed for source {source} query '{q}': {e}")
+        except Exception as e:
+            if "TimeoutError" in type(e).__name__:
+                print(f"[B-roll] Parallel gathering timed out after {timeout} seconds.")
+            else:
+                print(f"[B-roll] Error during parallel gathering: {e}")
+
+    for src in sources:
+        print(f"[B-roll] Source '{src}' returned {source_counts[src]} unique candidates.")
 
     # Apply de-duplication: filter out candidates that have already been used
     if used_urls:
@@ -979,6 +1248,21 @@ def fetch_broll(query: str, format_type: str, segment_index: int, duration: floa
         candidates = [c for c in candidates if c["video_url"] not in used_urls]
         if len(candidates) < original_count:
             print(f"[B-roll] De-duplicated candidates: filtered out {original_count - len(candidates)} already used clips.")
+
+    # Score all candidates
+    for c in candidates:
+        c["_score"] = _score_candidate(c, query, target_duration=duration)
+
+    # Sort descending by score
+    candidates.sort(key=lambda x: x.get("_score", 0.0), reverse=True)
+
+    # Send only the top 8 to vision_rank_broll
+    candidates = candidates[:8]
+
+    # Print the top sources in order so the log shows ranking
+    if candidates:
+        ranking_str = ", ".join(f"{c.get('source', 'Unknown')} (score: {c.get('_score', 0.0):.1f})" for c in candidates)
+        print(f"[B-roll] Top candidates after scoring: {ranking_str}")
 
     # Run Gemini Vision matching on candidates
     if candidates:
