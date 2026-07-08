@@ -94,12 +94,32 @@ def _fb_upload_reel(video_path: str, description: str, page_id: str, page_token:
 def _get_public_video_url(video_path: str) -> str | None:
     """Upload video to get a temporary public URL for IG API.
     
-    Tries tmpfiles.org first (free, fast, no limits), then falls back to file.io.
+    Tries uguu.se first, then falls back to tmpfiles.org and file.io.
     """
     file_size_mb = os.path.getsize(video_path) / (1024 * 1024)
     
-    # ── Method 1: tmpfiles.org ────────────────────────────────────────────────
-    print(f"[Meta/IG] Uploading {file_size_mb:.1f}MB to tmpfiles.org for public URL...")
+    # ── Method 1: uguu.se ─────────────────────────────────────────────────────
+    print(f"[Meta/IG] Uploading {file_size_mb:.1f}MB to uguu.se for public URL...")
+    try:
+        with open(video_path, "rb") as f:
+            resp = requests.post(
+                "https://uguu.se/upload",
+                files={"files[]": (os.path.basename(video_path), f, "video/mp4")},
+                timeout=600,
+            )
+        if resp.status_code == 200:
+            data = resp.json()
+            if data.get("success") and data.get("files"):
+                direct_url = data["files"][0].get("url")
+                if direct_url:
+                    print(f"[Meta/IG] uguu.se URL: {direct_url}")
+                    return direct_url
+        print(f"[Meta/IG] uguu.se failed: {resp.status_code} {resp.text[:200]}")
+    except Exception as e:
+        print(f"[Meta/IG] uguu.se error: {e}")
+        
+    # ── Method 2: tmpfiles.org (Fallback) ─────────────────────────────────────
+    print(f"[Meta/IG] Falling back: Uploading {file_size_mb:.1f}MB to tmpfiles.org...")
     try:
         with open(video_path, "rb") as f:
             resp = requests.post(
