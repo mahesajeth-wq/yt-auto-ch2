@@ -40,13 +40,26 @@ def generate_script(topic: dict, format_type: str) -> dict:
         prompt = f"""Generate an extremely viral, high-retention 25-35 second YouTube Short educational script on the topic: "{topic['topic']}".
 Use the following hook concept as your core theme: "{hook_formatted}" (short hook: "{topic.get('short_hook', '')}").
 
-Narration Style Requirements:
+Narration Style Requirements (with CH2 Nature Nourisher Niche Quality Signals):
 1. Pacing & Punchiness: 5 to 15 words per segment's narration. CRITICAL: NEVER split a single sentence across multiple segments! Each segment MUST contain 1 or 2 complete, self-contained sentences. If you split a sentence, the voiceover will pause awkwardly mid-sentence.
 2. Conversational & Extreme Simplicity: Use ONLY 5th-grade vocabulary. Extremely simple words, no complex grammar, no SAT words. Must be so simple a 10-year-old understands instantly.
 3. Engaging Tone: The voiceover narration must be conversational, highly engaging, and relatable—like a friend telling an exciting story. Write the voiceover to be energetic, warm, and inviting.
 3. Hook/Pattern Interrupt: Segment 1 must immediately shatter attention. Start with a shocking visual or conceptual paradox in under 12 words.
 4. Emotional/Sensory Triggers: Use strong, dramatic verbs and adjectives (e.g., "panicking", "shatters", "banned", "impossible", "melts", "secret", "trapped").
 5. No Fluff: Get straight to the mind-blowing science. Every word must justify its existence.
+
+COMPANION LAYER - NICHE & FORMAT UPGRADE (SHORT):
+- FORMAT RULE (20-30s Shorts): The entire video IS the hook. Hook, content, and payoff happen simultaneously.
+  * Grab (0-3s): One powerful statement, visual, or question. No intro. No channel name. No fluff.
+  * Deliver (3-20s): The actual value/story/reveal. Fast. Dense. No filler.
+  * Payoff + CTA (20-30s): The punchline, answer, result, or twist (one line only), then end.
+  * Avoid: Words that do not carry weight, silence over 1s, padding, slow pacing.
+- NICHE QUALITY SIGNALS (Nature):
+  * SPECIFIC DETAIL OVER GENERAL WONDER: Avoid vague awe ("nature is incredible"). Use highly specific facts ("this tree releases a chemical signal that neighboring trees detect within 30 minutes"). Every script must contain at least one detail this specific per segment.
+  * ONE SUBJECT BEFORE THE BIG IDEA: Always ground the video in one specific creature, place, or phenomenon first. Zoom out to the bigger lesson only after the viewer is already invested.
+  * LANGUAGE THAT CREATES PICTURES: Write so the viewer can picture what's being described even when visuals don't show it exactly.
+  * PACING THAT BREATHES: Nature content has slower natural pacing. Let shots and voiceover settle, never feel rushed.
+  * MACRO THEN WIDE: Start visually close — one leaf, one creature, one sound. Then pull back to the wider world.
 
 For every `broll_query` field, write a SHORT, SPECIFIC, STOCK-FOOTAGE-FRIENDLY
 search term of 3-6 words MAXIMUM. Write exactly what a human would type into
@@ -127,7 +140,7 @@ For the final segment (Segment {segment_count}) specifically:
         prompt = f"""Generate a comprehensive 7-10 minute YouTube educational script on the topic: "{topic['topic']}".
 The script must have 15 to 18 segments, each targeting 25-35 seconds of narration.
 
-Narration Style Requirements:
+Narration Style Requirements (with CH2 Nature Nourisher Niche Quality Signals):
 1. Conversational & Simple Language: Use very simple, easy-to-understand, and highly relatable words that anyone can easily follow. Avoid obscure, complex, or overly difficult English vocabulary. Keep the narration friendly, extremely engaging, and relatable—like a friend explaining an amazing topic.
 2. Engaging Tone: The voiceover narration must be conversational, highly engaging, and relatable—like a friend telling an exciting story. Write the voiceover to be energetic, warm, and inviting.
 Structure the narrative into:
@@ -136,6 +149,22 @@ Structure the narrative into:
 - Act 2: The surprising twist/implication (segments 8-12)
 - Act 3: Modern applications or future outlook (segments 13-16)
 - Closing CTA & link (segments 17-18)
+
+COMPANION LAYER - NICHE & FORMAT UPGRADE (LONG):
+- FORMAT RULE (5-6 Min Long): Tight format. Only room for one idea developed properly. No detours, no filler. Get there fast, go deep. Target exactly 15 to 18 segments, each targeting 18-22 seconds (or 35-45 words) of narration.
+  * Hook (0:00-0:20, segments 1-2): Most powerful moment first. No intro, no fluff.
+  * Context (0:20-0:45, segment 3): Minimum context needed. Nothing more.
+  * Core content (0:45-4:00, segments 4-13): Max 2-3 main points. Each point needs: a clear statement, one visual/example that proves it, and transition.
+  * Surprising Part (4:00-5:00, segments 14-16): Save one strong, interesting thing for here to prevent retention collapse.
+  * Payoff + CTA (5:00-5:30, segments 17-18): Wrap core idea. One line CTA. End clean.
+- PATTERN INTERRUPT: Include exactly 2-3 pattern interrupts total (visual shift, tonal change, new angle) around 1:30, 3:00, and 4:30.
+- Avoid: intro/context >45s, padding middle, saving best point for end, or >3 main points.
+- NICHE QUALITY SIGNALS (Nature):
+  * SPECIFIC DETAIL OVER GENERAL WONDER: Avoid vague awe ("nature is incredible"). Use highly specific facts ("this tree releases a chemical signal that neighboring trees detect within 30 minutes"). Every segment should contain at least one detail this specific.
+  * ONE SUBJECT BEFORE THE BIG IDEA: Always ground the video in one specific creature, place, or phenomenon first. Zoom out to the bigger lesson only after the viewer is already invested.
+  * LANGUAGE THAT CREATES PICTURES: Write so the viewer can picture what's being described even when visuals don't show it exactly.
+  * PACING THAT BREATHES: Nature content has slower natural pacing. Let shots and voiceover settle, never feel rushed.
+  * MACRO THEN WIDE: Start visually close — one leaf, one creature, one sound. Then pull back to the wider world.
 
 For every `broll_query` field, write a SHORT, SPECIFIC, STOCK-FOOTAGE-FRIENDLY
 search term of 3-6 words MAXIMUM. Write exactly what a human would type into
