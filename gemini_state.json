@@ -1,36 +1,36 @@
 {
   "0": {
-    "cooldown_until": 1783670400.0,
+    "cooldown_until": 1783756800.0,
     "failures": 4,
     "status": "daily_exhausted"
   },
   "1": {
-    "cooldown_until": 1783604797.7019088,
-    "failures": 0,
-    "status": "active"
+    "cooldown_until": 1783756800.0,
+    "failures": 4,
+    "status": "daily_exhausted"
   },
   "2": {
-    "cooldown_until": 1783604866.4935005,
-    "failures": 0,
-    "status": "active"
+    "cooldown_until": 1783756800.0,
+    "failures": 4,
+    "status": "daily_exhausted"
   },
   "3": {
-    "cooldown_until": 1783604876.367281,
-    "failures": 1,
-    "status": "active"
+    "cooldown_until": 1783756800.0,
+    "failures": 4,
+    "status": "daily_exhausted"
   },
   "4": {
-    "cooldown_until": 1783604657.2763867,
+    "cooldown_until": 0.0,
     "failures": 0,
     "status": "active"
   },
   "5": {
-    "cooldown_until": 1783604668.876624,
+    "cooldown_until": 0.0,
     "failures": 1,
     "status": "active"
   },
   "6": {
-    "cooldown_until": 1783604686.0620825,
+    "cooldown_until": 0.0,
     "failures": 0,
     "status": "active"
   },
@@ -40,37 +40,37 @@
     "status": "disabled"
   },
   "8": {
-    "cooldown_until": 1783604702.5640302,
+    "cooldown_until": 0.0,
     "failures": 0,
     "status": "active"
   },
   "9": {
-    "cooldown_until": 1783604722.1400027,
+    "cooldown_until": 0.0,
     "failures": 0,
     "status": "active"
   },
   "10": {
-    "cooldown_until": 1783604783.2327588,
+    "cooldown_until": 0.0,
     "failures": 0,
     "status": "active"
   },
   "11": {
-    "cooldown_until": 1783604799.6666439,
+    "cooldown_until": 0.0,
     "failures": 0,
     "status": "active"
   },
   "12": {
-    "cooldown_until": 1783604810.0910554,
+    "cooldown_until": 0.0,
     "failures": 0,
     "status": "active"
   },
   "13": {
-    "cooldown_until": 1783604820.405424,
+    "cooldown_until": 0.0,
     "failures": 0,
     "status": "active"
   },
   "14": {
-    "cooldown_until": 1783604781.4918184,
+    "cooldown_until": 0.0,
     "failures": 0,
     "status": "active"
   }
