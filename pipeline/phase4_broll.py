@@ -753,118 +753,74 @@ def _youtube_candidates(query: str, n: int = 5) -> list[dict]:
     Prioritizes Creative Commons licensed videos.
     Checks titles and descriptions to ensure they are free to use.
     """
-    from google.oauth2.credentials import Credentials
-    from google.auth.transport.requests import Request
-    from googleapiclient.discovery import build
-    from pipeline.config import YT_CLIENT_ID, YT_CLIENT_SECRET, YT_REFRESH_TOKEN
+    import yt_dlp
     import re
     
-    if not (YT_CLIENT_ID and YT_CLIENT_SECRET and YT_REFRESH_TOKEN):
-        print("[B-roll] YouTube credentials not configured in environment.")
-        return []
-        
+    candidates = []
     try:
-        creds = Credentials(
-            token=None,
-            refresh_token=YT_REFRESH_TOKEN,
-            token_uri="https://oauth2.googleapis.com/token",
-            client_id=YT_CLIENT_ID,
-            client_secret=YT_CLIENT_SECRET,
-            scopes=["https://www.googleapis.com/auth/youtube.readonly", "https://www.googleapis.com/auth/youtube"]
-        )
-        creds.refresh(Request())
-        youtube = build("youtube", "v3", credentials=creds)
-        
-        # 1. Search for Creative Commons videos first
-        print(f"[B-roll] Searching YouTube for Creative Commons videos matching: '{query}'...")
-        search_res = youtube.search().list(
-            q=f"{query} royalty free",
-            part="snippet",
-            type="video",
-            videoLicense="creativeCommon",
-            maxResults=n
-        ).execute()
-        
-        items = search_res.get("items", [])
-        
-        # If no Creative Commons results, search with standard license but strict keywords
-        if not items:
-            print(f"[B-roll] No Creative Commons videos found. Searching general videos with strict keywords...")
-            search_res = youtube.search().list(
-                q=f"{query} copyright free stock footage",
-                part="snippet",
-                type="video",
-                maxResults=n
-            ).execute()
-            items = search_res.get("items", [])
+        print(f"[B-roll] Searching YouTube with yt-dlp matching: '{query}'...")
+        ydl_opts = {
+            'quiet': True,
+            'extract_flat': True,
+            'force_generic_extractor': False,
+        }
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            # We search for "query royalty free" or "query creative commons"
+            search_query = f"ytsearch{n}:{query} royalty free"
+            result = ydl.extract_info(search_query, download=False)
             
-        if not items:
-            return []
-            
-        video_ids = [item["id"]["videoId"] for item in items if "videoId" in item["id"]]
-        if not video_ids:
-            return []
-            
-        # 2. Get video details (contentDetails, status, snippet)
-        video_res = youtube.videos().list(
-            part="snippet,status,contentDetails",
-            id=",".join(video_ids)
-        ).execute()
-        
-        candidates = []
-        for v in video_res.get("items", []):
-            vid = v["id"]
-            snippet = v.get("snippet", {})
-            title = snippet.get("title", "").lower()
-            desc = snippet.get("description", "").lower()
-            status = v.get("status", {})
-            license_type = status.get("license", "")
-            
-            # Duration check
-            duration_str = v.get("contentDetails", {}).get("duration", "")
-            duration_secs = _parse_iso_duration(duration_str)
-            
-            # Skip extremely short or extremely long videos
-            if duration_secs < 5 or duration_secs > 600:
-                continue
+            entries = result.get('entries', []) if result else []
+            for entry in entries:
+                if not entry:
+                    continue
+                title = entry.get('title', '')
+                desc = entry.get('description', '')
+                url = entry.get('url', '')
+                duration = entry.get('duration')
                 
-            # Verify if the video is royalty-free/copyright-free
-            is_cc = (license_type == "creativeCommon")
-            has_free_keywords = any(kw in (title + " " + desc) for kw in [
-                "royalty free", "copyright free", "no copyright", "free to use",
-                "creative commons", "cc0", "public domain", "free stock footage", "stock video free"
-            ])
-            
-            # Skip if there are clear copyright restrictions
-            has_copyright_restriction = any(kw in desc for kw in [
-                "all rights reserved", "do not copy", "copyright protected", "unauthorized reuse prohibited"
-            ])
-            
-            if (is_cc or has_free_keywords) and not has_copyright_restriction:
-                # Get highest resolution thumbnail
-                thumbnails = snippet.get("thumbnails", {})
-                thumb_url = (
-                    thumbnails.get("maxres", {}).get("url") or 
-                    thumbnails.get("standard", {}).get("url") or 
-                    thumbnails.get("high", {}).get("url") or 
-                    thumbnails.get("medium", {}).get("url") or 
-                    thumbnails.get("default", {}).get("url")
-                )
+                if not url:
+                    continue
+                    
+                duration_secs = float(duration) if duration else 0.0
+                # Skip extremely short or extremely long videos
+                if duration_secs < 5 or duration_secs > 600:
+                    continue
                 
-                candidates.append({
-                    "source": "YouTube",
-                    "video_url": f"https://www.youtube.com/watch?v={vid}",
-                    "thumb_url": thumb_url,
-                    "title": snippet.get("title", ""),
-                    "description": snippet.get("description", ""),
-                    "duration": duration_secs
-                })
+                title_lower = title.lower()
+                desc_lower = (desc or '').lower()
                 
-        print(f"[B-roll] Found {len(candidates)} valid YouTube candidates.")
+                # Check for royalty-free keywords
+                has_free_keywords = any(kw in (title_lower + " " + desc_lower) for kw in [
+                    "royalty free", "copyright free", "no copyright", "free to use",
+                    "creative commons", "cc0", "public domain", "free stock footage", "stock video free"
+                ])
+                
+                # Skip if there are clear copyright restrictions
+                has_copyright_restriction = any(kw in desc_lower for kw in [
+                    "all rights reserved", "do not copy", "copyright protected", "unauthorized reuse prohibited"
+                ])
+                
+                if has_free_keywords and not has_copyright_restriction:
+                    # Get highest resolution thumbnail
+                    thumbnails = entry.get("thumbnails", [])
+                    thumb_url = ""
+                    if thumbnails:
+                        # Find thumbnail with highest height/width or just take the last one
+                        thumb_url = thumbnails[-1].get("url", "")
+                        
+                    candidates.append({
+                        "source": "YouTube",
+                        "video_url": url,
+                        "thumb_url": thumb_url,
+                        "title": title,
+                        "description": desc or "",
+                        "duration": duration_secs
+                    })
+                    
+        print(f"[B-roll] Found {len(candidates)} valid YouTube candidates using yt-dlp.")
         return candidates
-        
     except Exception as e:
-        print(f"[B-roll] YouTube search failed/insufficient permissions: {e}")
+        print(f"[B-roll] YouTube search via yt-dlp failed: {e}")
         return []
 
 
