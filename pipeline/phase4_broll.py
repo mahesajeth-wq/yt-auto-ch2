@@ -898,6 +898,8 @@ def _image_to_ken_burns_video(img_path: str, out_path: str, w: int, h: int, dura
     try:
         import json
         import subprocess
+        import uuid
+        import shutil
         
         niche_map = {
             "science": "science",
@@ -913,8 +915,14 @@ def _image_to_ken_burns_video(img_path: str, out_path: str, w: int, h: int, dura
         abs_out = os.path.abspath(out_path)
         template_dir = os.path.abspath("pipeline/hyperframes_templates")
         
+        # Copy input asset to template directory to avoid CORS/Same-Origin file:// loading blocks in Puppeteer/Chrome
+        ext = os.path.splitext(img_path)[1].lower()
+        temp_filename = f"temp_{uuid.uuid4().hex}{ext}"
+        temp_path = os.path.join(template_dir, temp_filename)
+        shutil.copy2(img_path, temp_path)
+        
         variables = {
-            "imageUrl": f"file://{abs_img}",
+            "imageUrl": temp_filename,
             "duration": duration,
             "niche": mapped_niche,
             "caption": caption
@@ -932,12 +940,19 @@ def _image_to_ken_burns_video(img_path: str, out_path: str, w: int, h: int, dura
         ]
         
         print(f"[B-roll] Rendering Hyperframes with niche={mapped_niche}...")
-        res = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        if res.returncode == 0 and os.path.exists(out_path) and os.path.getsize(out_path) > 10_000:
-            print(f"[B-roll] Hyperframes render successful: {out_path}")
-            return
-        else:
-            print("[B-roll] Hyperframes render failed or returned empty file. Falling back to FFmpeg.")
+        try:
+            res = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            if res.returncode == 0 and os.path.exists(out_path) and os.path.getsize(out_path) > 10_000:
+                print(f"[B-roll] Hyperframes render successful: {out_path}")
+                return
+            else:
+                print("[B-roll] Hyperframes render failed or returned empty file. Falling back to FFmpeg.")
+        finally:
+            if os.path.exists(temp_path):
+                try:
+                    os.remove(temp_path)
+                except Exception:
+                    pass
     except Exception as e:
         print(f"[B-roll] Hyperframes execution error: {e}. Falling back to FFmpeg.")
 
