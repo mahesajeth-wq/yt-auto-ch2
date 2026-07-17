@@ -59,37 +59,20 @@
       width: 100%;
       height: 100%;
       pointer-events: none;
-      opacity: 0;
-      display: none;
+      z-index: 5;
     }
 
-    /* Science Niche HUD */
-    .niche-science #overlay-grid {
-      display: block;
+    /* --- Science Niche: Glitch Grid Telemetry --- */
+    #science-grid-overlay {
+      display: none;
       opacity: 0.15;
       background-size: 40px 40px;
       background-image: 
         linear-gradient(to right, #00f0ff 1px, transparent 1px),
         linear-gradient(to bottom, #00f0ff 1px, transparent 1px);
     }
-    .niche-science #overlay-hud {
+    .niche-science #science-grid-overlay {
       display: block;
-      opacity: 0.8;
-      border: 2px solid rgba(0, 240, 255, 0.3);
-      margin: 15px;
-      width: calc(100% - 30px);
-      height: calc(100% - 30px);
-      box-shadow: inset 0 0 20px rgba(0, 240, 255, 0.1);
-    }
-    .niche-science #overlay-hud::before {
-      content: "SCANNING ACTIVE... STATUS: OK";
-      position: absolute;
-      top: 10px;
-      left: 15px;
-      color: #00f0ff;
-      font-family: 'Share Tech Mono', monospace;
-      font-size: 12px;
-      letter-spacing: 2px;
     }
     #scanner-line {
       position: absolute;
@@ -98,94 +81,176 @@
       width: 100%;
       height: 4px;
       background: linear-gradient(180deg, rgba(0,240,255,0) 0%, rgba(0,240,255,0.8) 50%, rgba(0,240,255,0) 100%);
-      box-shadow: 0 0 10px rgba(0,240,255,0.5);
+      box-shadow: 0 0 12px rgba(0,240,255,0.6);
       display: none;
+      z-index: 6;
     }
     .niche-science #scanner-line {
       display: block;
     }
+    #science-hud {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      width: calc(100% - 40px);
+      height: calc(100% - 40px);
+      border: 1px solid rgba(0, 240, 255, 0.25);
+      pointer-events: none;
+      z-index: 6;
+      display: none;
+    }
+    .niche-science #science-hud {
+      display: block;
+    }
+    #science-hud::before {
+      content: "SCAN ACTIVE... UNIT_04";
+      position: absolute;
+      top: 10px;
+      left: 15px;
+      color: #00f0ff;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 2px;
+    }
+    #science-hud-coords {
+      position: absolute;
+      bottom: 10px;
+      right: 15px;
+      color: #00f0ff;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 12px;
+    }
 
-    /* Nature Niche Atmospheric */
-    .niche-nature #overlay-vignette {
-      display: block;
-      opacity: 0.7;
-      background: radial-gradient(circle, transparent 40%, rgba(0,0,0,0.9) 100%);
+    /* --- Nature Niche: Mist & Silhouette --- */
+    #nature-mist-overlay {
+      display: none;
+      opacity: 0;
+      background: linear-gradient(135deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0) 50%, rgba(255,255,255,0.2) 100%);
+      mix-blend-mode: screen;
     }
-    .niche-nature #overlay-mist {
+    .niche-nature #nature-mist-overlay {
       display: block;
-      opacity: 0.35;
-      background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 50%, rgba(255,255,255,0.15) 100%);
+    }
+    #nature-vignette {
+      display: none;
+      background: radial-gradient(circle, transparent 40%, rgba(0,0,0,0.85) 100%);
+    }
+    .niche-nature #nature-vignette {
+      display: block;
+    }
+    #nature-silhouette-mask {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      top: 0;
+      left: 0;
+      z-index: 4;
+      display: none;
+    }
+    .niche-nature #nature-silhouette-mask {
+      display: block;
     }
 
-    /* History Niche Vintage */
-    .niche-history #overlay-vignette {
-      display: block;
-      opacity: 0.6;
-      background: radial-gradient(circle, transparent 50%, rgba(40,20,0,0.85) 100%);
-    }
+    /* --- History Niche: Scrapbook circle --- */
     .niche-history #broll-image {
-      filter: sepia(0.65) contrast(1.1) brightness(0.95);
+      filter: sepia(0.6) contrast(1.1) brightness(0.9);
     }
-    .niche-history #overlay-noise {
+    #history-vignette {
+      display: none;
+      background: radial-gradient(circle, transparent 50%, rgba(35,20,5,0.8) 100%);
+    }
+    .niche-history #history-vignette {
       display: block;
-      opacity: 0.08;
-      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+    }
+    #history-pen-svg {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 6;
+      display: none;
+    }
+    .niche-history #history-pen-svg {
+      display: block;
     }
 
-    /* Engineering Niche Blueprint */
-    .niche-engineering #overlay-grid {
-      display: block;
+    /* --- Engineering Niche: CAD Draft --- */
+    #engineering-grid-overlay {
+      display: none;
       opacity: 0.25;
       background-size: 50px 50px;
       background-image: 
-        linear-gradient(to right, #ffffff 1px, transparent 1px),
-        linear-gradient(to bottom, #ffffff 1px, transparent 1px);
+        linear-gradient(to right, rgba(255,255,255,0.25) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255,255,255,0.25) 1px, transparent 1px);
+      background-color: #0b1a30;
+      z-index: 2;
     }
-    .niche-engineering #broll-image {
-      filter: saturate(0.2) brightness(0.8) contrast(1.2);
-    }
-    .niche-engineering #overlay-hud {
+    .niche-engineering #engineering-grid-overlay {
       display: block;
-      opacity: 0.5;
-      border: 1px dashed rgba(255, 255, 255, 0.4);
-      margin: 20px;
-      width: calc(100% - 40px);
-      height: calc(100% - 40px);
     }
-
-    /* Business Niche Executive */
-    .niche-business #overlay-hud {
-      display: block;
-      opacity: 0.9;
-    }
-    #ticker-ribbon {
+    #engineering-cad-svg {
       position: absolute;
-      bottom: 20px;
+      top: 0;
       left: 0;
       width: 100%;
-      height: 35px;
-      background-color: rgba(10, 20, 15, 0.85);
-      border-top: 1px solid #d4af37;
-      border-bottom: 1px solid #d4af37;
-      display: flex;
-      align-items: center;
-      overflow: hidden;
-      font-family: 'Space Grotesk', sans-serif;
-      font-size: 14px;
-      color: #d4af37;
+      height: 100%;
+      z-index: 6;
       display: none;
     }
-    .niche-business #ticker-ribbon {
-      display: flex;
+    .niche-engineering #engineering-cad-svg {
+      display: block;
     }
-    .ticker-wrapper {
-      display: flex;
-      white-space: nowrap;
-      padding-left: 100%;
+
+    /* --- Business Niche: Candlestick Split --- */
+    #business-split-container {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      top: 0;
+      left: 0;
+      display: none;
+      z-index: 6;
+      pointer-events: none;
     }
-    .ticker-item {
-      padding: 0 30px;
-      font-weight: bold;
+    .niche-business #business-split-container {
+      display: block;
+    }
+    #business-chart-panel {
+      position: absolute;
+      left: 0;
+      bottom: 0;
+      width: 100%;
+      height: 30%;
+      background-color: rgba(10, 15, 12, 0.95);
+      border-top: 1px solid #d4af37;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 15px;
+    }
+    #business-chart-svg {
+      width: 80%;
+      height: 60%;
+    }
+    .candlestick {
+      fill: #22c55e;
+      stroke: #22c55e;
+      stroke-width: 2;
+    }
+    .candlestick.down {
+      fill: #ef4444;
+      stroke: #ef4444;
+    }
+    .wick {
+      stroke-width: 2;
+    }
+    .wick.up {
+      stroke: #22c55e;
+    }
+    .wick.down {
+      stroke: #ef4444;
     }
 
     /* --- Caption / Hook Text Box --- */
@@ -199,10 +264,9 @@
       text-align: center;
       z-index: 10;
       box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-      display: none; /* Only displayed if caption is provided */
+      display: none;
     }
 
-    /* Default / General styling (bottom) */
     .caption-pos-bottom {
       bottom: 80px;
       background-color: rgba(0,0,0,0.75);
@@ -210,39 +274,35 @@
       color: #fff;
     }
 
-    /* Science Niche styling (top HUD look) */
     .niche-science #caption-box {
-      top: 60px;
+      top: 120px;
       bottom: auto;
-      background-color: rgba(0, 15, 30, 0.8);
+      background-color: rgba(0, 15, 30, 0.85);
       border: 1px solid #00f0ff;
       font-family: 'Share Tech Mono', monospace;
       color: #00f0ff;
     }
 
-    /* History Niche styling (parchment card look) */
     .niche-history #caption-box {
-      bottom: 100px;
+      bottom: 140px;
       background-color: #f2ebd9;
       border: 2px solid #5c4033;
       font-family: 'Courier Prime', monospace;
       color: #2b1d0c;
     }
 
-    /* Engineering Niche styling */
     .niche-engineering #caption-box {
-      bottom: 70px;
-      background-color: rgba(10, 20, 40, 0.85);
+      bottom: 110px;
+      background-color: rgba(10, 20, 40, 0.9);
       border-left: 5px solid #fff;
       font-family: 'Space Grotesk', sans-serif;
       color: #fff;
       text-align: left;
     }
 
-    /* Business Niche styling */
     .niche-business #caption-box {
-      bottom: 90px;
-      background-color: rgba(15,15,15,0.9);
+      bottom: 34%;
+      background-color: rgba(15,15,15,0.95);
       border: 1px solid #d4af37;
       color: #fff;
       font-family: 'Space Grotesk', sans-serif;
@@ -252,9 +312,6 @@
       font-size: 20px;
       font-weight: 500;
       line-height: 1.4;
-    }
-    .niche-history #caption-text {
-      font-weight: bold;
     }
   </style>
 </head>
@@ -272,26 +329,65 @@
     <div id="broll-container">
       <img id="broll-image" src="" alt="B-roll image">
       
-      <!-- Styled overlays -->
-      <div id="overlay-grid" class="overlay"></div>
-      <div id="overlay-vignette" class="overlay"></div>
-      <div id="overlay-noise" class="overlay"></div>
-      <div id="overlay-mist" class="overlay"></div>
-      <div id="overlay-hud" class="overlay"></div>
+      <!-- Niche Overlays -->
+      <!-- Science -->
+      <div id="science-grid-overlay" class="overlay"></div>
       <div id="scanner-line"></div>
-      
-      <!-- Stock ticker for business -->
-      <div id="ticker-ribbon">
-        <div class="ticker-wrapper" id="ticker-wrapper">
-          <div class="ticker-item">NYSE +1.2%</div>
-          <div class="ticker-item">NASDAQ +0.8%</div>
-          <div class="ticker-item">GOLD +2.4%</div>
-          <div class="ticker-item">BRENT $84.20</div>
-          <div class="ticker-item">BTC +4.5%</div>
+      <div id="science-hud">
+        <div id="science-hud-coords">SYS: OK // COORDS: 0.0000, 0.0000</div>
+      </div>
+
+      <!-- Nature -->
+      <div id="nature-vignette" class="overlay"></div>
+      <div id="nature-mist-overlay" class="overlay"></div>
+      <svg id="nature-silhouette-mask" viewBox="0 0 1080 1920" preserveAspectRatio="none">
+        <defs>
+          <mask id="nature-mask">
+            <rect width="1080" height="1920" fill="white" />
+            <circle id="mask-circle" cx="540" cy="960" r="300" fill="black" />
+          </mask>
+        </defs>
+        <rect width="1080" height="1920" fill="#051008" mask="url(#nature-mask)" opacity="0.9" />
+      </svg>
+
+      <!-- History -->
+      <div id="history-vignette" class="overlay"></div>
+      <svg id="history-pen-svg" viewBox="0 0 1080 1920">
+        <ellipse id="marker-circle" cx="540" cy="960" rx="180" ry="100" 
+                 fill="none" stroke="#ef4444" stroke-width="4" stroke-dasharray="1000" stroke-dashoffset="1000" />
+      </svg>
+
+      <!-- Engineering -->
+      <div id="engineering-grid-overlay" class="overlay"></div>
+      <svg id="engineering-cad-svg" viewBox="0 0 1080 1920">
+        <path class="cad-vector-path" d="M50,50 L1030,50 L1030,1870 L50,1870 Z" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="2" stroke-dasharray="800" stroke-dashoffset="800" />
+        <path class="cad-vector-path" d="M50,50 L1030,1870" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="1" stroke-dasharray="800" stroke-dashoffset="800" />
+        <path class="cad-vector-path" d="M50,1870 L1030,50" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="1" stroke-dasharray="800" stroke-dashoffset="800" />
+      </svg>
+
+      <!-- Business -->
+      <div id="business-split-container">
+        <div id="business-chart-panel">
+          <h4 style="color:#d4af37; margin-bottom:10px; font-family:'Space Grotesk'; font-size:14px;">MARKET PERFORMANCE</h4>
+          <svg id="business-chart-svg" viewBox="0 0 200 100">
+            <!-- Candlestick chart elements (centered for horizontal aspect in panel) -->
+            <!-- Step 1 -->
+            <line class="wick up" x1="30" y1="20" x2="30" y2="80" />
+            <rect class="candlestick" x="20" y="30" width="20" height="40" />
+            <!-- Step 2 -->
+            <line class="wick up" x1="80" y1="10" x2="80" y2="70" />
+            <rect class="candlestick" x="70" y="15" width="20" height="35" />
+            <!-- Step 3 -->
+            <line class="wick down" x1="130" y1="30" x2="130" y2="90" />
+            <rect class="candlestick down" x="120" y="40" width="20" height="40" />
+            <!-- Step 4 -->
+            <line class="wick up" x1="180" y1="5" x2="180" y2="55" />
+            <rect class="candlestick" x="170" y="10" width="20" height="30" />
+          </svg>
         </div>
       </div>
-      
-      <!-- Text Hook Container -->
+
+      <!-- Caption Box -->
       <div id="caption-box" class="caption-pos-bottom">
         <div id="caption-text"></div>
       </div>
@@ -390,20 +486,85 @@
     if (niche === "science") {
       const line = document.getElementById("scanner-line");
       const vpHeight = document.getElementById("viewport").offsetHeight || 1920;
-      // Scanner line loop via transform-y
+      // Scanner line loop via transform-y (sub-pixel, smooth)
       tl.fromTo(line,
         { y: 0 },
         { y: vpHeight - 4, duration: duration / 2, ease: "sine.inOut", repeat: 1, yoyo: true },
         0
       );
+
+      // Coordinate rolling display
+      const coords = { lat: 0, lng: 0 };
+      tl.to(coords, {
+        lat: 37.7749,
+        lng: -122.4194,
+        duration: duration - 1,
+        ease: "power1.out",
+        onUpdate: () => {
+          document.getElementById("science-hud-coords").innerText = `SYS: OK // COORDS: ${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}`;
+        }
+      }, 0.2);
+      
+    } else if (niche === "nature") {
+      // Mystery mask expansion
+      tl.fromTo("#mask-circle",
+        { attr: { r: 250 } },
+        { attr: { r: 500 }, duration: duration, ease: "sine.out" },
+        0
+      );
+      // Volumetric mist drift
+      tl.fromTo("#nature-mist-overlay",
+        { opacity: 0.1, xPercent: -5 },
+        { opacity: 0.35, xPercent: 5, duration: duration, ease: "linear" },
+        0
+      );
+
+    } else if (niche === "history") {
+      // Polaroid sliding-in from left
+      tl.fromTo("#broll-container",
+        { xPercent: -10, rotation: -4 },
+        { xPercent: 0, rotation: 0, duration: 1.5, ease: "power2.out" },
+        0
+      );
+      // Draw pen highlight circle
+      tl.fromTo("#marker-circle",
+        { strokeDashoffset: 1000 },
+        { strokeDashoffset: 0, duration: 1.8, ease: "power1.inOut" },
+        1.2
+      );
+
+    } else if (niche === "engineering") {
+      // Blueprint grid transition: start with dark blue grid, fade grid/reveal picture
+      tl.fromTo("#engineering-grid-overlay",
+        { opacity: 0.8 },
+        { opacity: 0.2, duration: 2.0, ease: "sine.inOut" },
+        1.0
+      );
+      // Draw structural CAD lines
+      tl.fromTo(".cad-vector-path",
+        { strokeDashoffset: 800 },
+        { strokeDashoffset: 0, duration: 2.2, ease: "power2.out", stagger: 0.2 },
+        0
+      );
+
     } else if (niche === "business") {
-      const ticker = document.getElementById("ticker-wrapper");
-      // Slide ticker text across the screen
-      tl.to(ticker, {
-        x: "-100%",
-        duration: duration,
-        ease: "none"
-      }, 0);
+      // Split panel slider entry
+      tl.fromTo("#business-chart-panel",
+        { yPercent: 100 },
+        { yPercent: 0, duration: 1.2, ease: "power3.out" },
+        0
+      );
+      // Draw candlesticks
+      tl.fromTo(".candlestick",
+        { scaleY: 0 },
+        { scaleY: 1, duration: 0.8, stagger: 0.08, transformOrigin: "bottom", ease: "back.out(1.2)" },
+        0.8
+      );
+      tl.fromTo(".wick",
+        { scaleY: 0 },
+        { scaleY: 1, duration: 0.8, stagger: 0.08, transformOrigin: "center", ease: "power2.out" },
+        0.8
+      );
     }
 
     // 3. Caption entry animation
