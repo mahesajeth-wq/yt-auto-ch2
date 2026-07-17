@@ -819,8 +819,10 @@ def _image_to_ken_burns_video(img_path: str, out_path: str, w: int, h: int, dura
         }
         
         resolution = "portrait" if h > w else "landscape"
+        template_file = "index_portrait.html" if h > w else "index_landscape.html"
         cmd = [
             "npx", "hyperframes", "render", template_dir,
+            "-c", template_file,
             "--output", abs_out,
             "--resolution", resolution,
             "--quality", "high",
