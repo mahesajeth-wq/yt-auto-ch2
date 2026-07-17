@@ -736,8 +736,154 @@ def _archive_video(query: str) -> str | None:
         return None
 
 
+def _parse_iso_duration(duration_str: str) -> float:
+    import re
+    match = re.match(r'PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?', duration_str)
+    if not match:
+        return 0.0
+    hours = int(match.group(1)) if match.group(1) else 0
+    minutes = int(match.group(2)) if match.group(2) else 0
+    seconds = int(match.group(3)) if match.group(3) else 0
+    return float(hours * 3600 + minutes * 60 + seconds)
+
+
+def _youtube_candidates(query: str, n: int = 5) -> list[dict]:
+    """
+    Search YouTube for royalty-free / copyright-free videos matching the query.
+    Prioritizes Creative Commons licensed videos.
+    Checks titles and descriptions to ensure they are free to use.
+    """
+    from google.oauth2.credentials import Credentials
+    from google.auth.transport.requests import Request
+    from googleapiclient.discovery import build
+    from pipeline.config import YT_CLIENT_ID, YT_CLIENT_SECRET, YT_REFRESH_TOKEN
+    import re
+    
+    if not (YT_CLIENT_ID and YT_CLIENT_SECRET and YT_REFRESH_TOKEN):
+        print("[B-roll] YouTube credentials not configured in environment.")
+        return []
+        
+    try:
+        creds = Credentials(
+            token=None,
+            refresh_token=YT_REFRESH_TOKEN,
+            token_uri="https://oauth2.googleapis.com/token",
+            client_id=YT_CLIENT_ID,
+            client_secret=YT_CLIENT_SECRET,
+            scopes=["https://www.googleapis.com/auth/youtube.readonly", "https://www.googleapis.com/auth/youtube"]
+        )
+        creds.refresh(Request())
+        youtube = build("youtube", "v3", credentials=creds)
+        
+        # 1. Search for Creative Commons videos first
+        print(f"[B-roll] Searching YouTube for Creative Commons videos matching: '{query}'...")
+        search_res = youtube.search().list(
+            q=f"{query} royalty free",
+            part="snippet",
+            type="video",
+            videoLicense="creativeCommon",
+            maxResults=n
+        ).execute()
+        
+        items = search_res.get("items", [])
+        
+        # If no Creative Commons results, search with standard license but strict keywords
+        if not items:
+            print(f"[B-roll] No Creative Commons videos found. Searching general videos with strict keywords...")
+            search_res = youtube.search().list(
+                q=f"{query} copyright free stock footage",
+                part="snippet",
+                type="video",
+                maxResults=n
+            ).execute()
+            items = search_res.get("items", [])
+            
+        if not items:
+            return []
+            
+        video_ids = [item["id"]["videoId"] for item in items if "videoId" in item["id"]]
+        if not video_ids:
+            return []
+            
+        # 2. Get video details (contentDetails, status, snippet)
+        video_res = youtube.videos().list(
+            part="snippet,status,contentDetails",
+            id=",".join(video_ids)
+        ).execute()
+        
+        candidates = []
+        for v in video_res.get("items", []):
+            vid = v["id"]
+            snippet = v.get("snippet", {})
+            title = snippet.get("title", "").lower()
+            desc = snippet.get("description", "").lower()
+            status = v.get("status", {})
+            license_type = status.get("license", "")
+            
+            # Duration check
+            duration_str = v.get("contentDetails", {}).get("duration", "")
+            duration_secs = _parse_iso_duration(duration_str)
+            
+            # Skip extremely short or extremely long videos
+            if duration_secs < 5 or duration_secs > 600:
+                continue
+                
+            # Verify if the video is royalty-free/copyright-free
+            is_cc = (license_type == "creativeCommon")
+            has_free_keywords = any(kw in (title + " " + desc) for kw in [
+                "royalty free", "copyright free", "no copyright", "free to use",
+                "creative commons", "cc0", "public domain", "free stock footage", "stock video free"
+            ])
+            
+            # Skip if there are clear copyright restrictions
+            has_copyright_restriction = any(kw in desc for kw in [
+                "all rights reserved", "do not copy", "copyright protected", "unauthorized reuse prohibited"
+            ])
+            
+            if (is_cc or has_free_keywords) and not has_copyright_restriction:
+                # Get highest resolution thumbnail
+                thumbnails = snippet.get("thumbnails", {})
+                thumb_url = (
+                    thumbnails.get("maxres", {}).get("url") or 
+                    thumbnails.get("standard", {}).get("url") or 
+                    thumbnails.get("high", {}).get("url") or 
+                    thumbnails.get("medium", {}).get("url") or 
+                    thumbnails.get("default", {}).get("url")
+                )
+                
+                candidates.append({
+                    "source": "YouTube",
+                    "video_url": f"https://www.youtube.com/watch?v={vid}",
+                    "thumb_url": thumb_url,
+                    "title": snippet.get("title", ""),
+                    "description": snippet.get("description", ""),
+                    "duration": duration_secs
+                })
+                
+        print(f"[B-roll] Found {len(candidates)} valid YouTube candidates.")
+        return candidates
+        
+    except Exception as e:
+        print(f"[B-roll] YouTube search failed/insufficient permissions: {e}")
+        return []
+
+
 def _download_video_robust(url: str, out_path: str, segment_index: int) -> bool:
     try:
+        # Check if downloading from YouTube
+        if "youtube.com" in url or "youtu.be" in url:
+            print(f"[B-roll] Downloading YouTube video using yt-dlp: {url}...")
+            import yt_dlp
+            ydl_opts = {
+                'format': 'bestvideo[height<=1080][ext=mp4]/best[height<=1080][ext=mp4]/best',
+                'outtmpl': out_path,
+                'quiet': True,
+                'no_warnings': True,
+            }
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([url])
+            return os.path.exists(out_path) and os.path.getsize(out_path) > 10_000
+
         r = requests.get(url, stream=True, timeout=90, headers={"User-Agent": "yt-auto/1.0"})
         r.raise_for_status()
 
@@ -1128,6 +1274,7 @@ def _score_candidate(item: dict, query: str, target_duration: float = 8.0) -> fl
         dur_score = max(0.0, 20.0 - 2.0 * diff)
         
     source_weights = {
+        "youtube": 25.0,
         "nasa": 20.0,
         "dvids": 18.0,
         "wikimedia": 16.0,
@@ -1201,17 +1348,19 @@ def fetch_broll(query: str, format_type: str, segment_index: int, duration: floa
     candidates = []
 
     CHANNEL_SOURCE_PRIORITY = {
-        "science":     ["nasa", "dvids", "wikimedia", "coverr", "archive", "pexels", "pixabay"],
-        "nature":      ["pexels", "pixabay", "coverr", "wikimedia", "archive"],
-        "mystery":     ["archive", "wikimedia", "coverr", "pexels", "pixabay"],
-        "engineering": ["nasa", "dvids", "coverr", "wikimedia", "pexels", "archive"],
-        "business":    ["coverr", "pexels", "pixabay", "klipy"],
-        "general":     ["coverr", "pexels", "pixabay", "nasa", "wikimedia", "archive", "dvids"],
+        "science":     ["youtube", "nasa", "dvids", "wikimedia", "coverr", "archive", "pexels", "pixabay"],
+        "nature":      ["youtube", "pexels", "pixabay", "coverr", "wikimedia", "archive"],
+        "mystery":     ["youtube", "archive", "wikimedia", "coverr", "pexels", "pixabay"],
+        "engineering": ["youtube", "nasa", "dvids", "coverr", "wikimedia", "pexels", "archive"],
+        "business":    ["youtube", "coverr", "pexels", "pixabay", "klipy"],
+        "general":     ["youtube", "coverr", "pexels", "pixabay", "nasa", "wikimedia", "archive", "dvids"],
     }
 
     def run_source_query(source: str, q: str) -> list[dict]:
         try:
-            if source == "nasa":
+            if source == "youtube":
+                return _youtube_candidates(q, n=3)
+            elif source == "nasa":
                 if not NASA_BROLL_ENABLED:
                     return []
                 cand = _nasa_video_candidate(q)
