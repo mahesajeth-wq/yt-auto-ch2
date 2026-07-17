@@ -1344,9 +1344,17 @@ def fetch_broll(query: str, format_type: str, segment_index: int, duration: floa
             if match_found and best_idx is not None and best_idx < len(valid_candidates):
                 chosen = valid_candidates[best_idx]
                 print(f"[B-roll] Winner chosen! Source: {chosen.get('source', 'Unknown')} (Index: {best_idx}). Downloading video…")
-                if _download_video_robust(chosen["video_url"], out_path, segment_index):
+                temp_video_path = f"output/temp_video_{segment_index}.mp4"
+                if _download_video_robust(chosen["video_url"], temp_video_path, segment_index):
                     if used_urls is not None:
                         used_urls.add(chosen["video_url"])
+                    print(f"[B-roll] Video downloaded. Running Hyperframes overlays...")
+                    _image_to_ken_burns_video(temp_video_path, out_path, w, h, duration, niche=channel, caption=_shorten_narration(narration) if narration else query)
+                    if os.path.exists(temp_video_path):
+                        try:
+                            os.remove(temp_video_path)
+                        except Exception:
+                            pass
                     return out_path
             else:
                 print(f"[B-roll] None of the {len(valid_candidates)} candidates passed strict Vision Match.")
@@ -1476,11 +1484,9 @@ def fetch_broll(query: str, format_type: str, segment_index: int, duration: floa
             winner = downloaded_results[best_idx]
             print(f"[B-roll] Parallel winner chosen! Source: {winner['label']} (Index: {best_idx})")
             
-            # Keep the winner video
-            if os.path.exists(out_path):
-                os.remove(out_path)
-            import shutil
-            shutil.move(winner["temp_v"], out_path)
+            # Run the video through Hyperframes overlays
+            print(f"[B-roll] Parallel winner video. Running Hyperframes overlays...")
+            _image_to_ken_burns_video(winner["temp_v"], out_path, w, h, duration, niche=channel, caption=_shorten_narration(narration) if narration else query)
             
             if used_urls is not None:
                 used_urls.add(winner["video_url"])
