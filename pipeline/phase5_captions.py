@@ -66,6 +66,21 @@ def align_words(script_words: list[str], whisper_words: list[dict]) -> list[dict
     return aligned
 
 def generate_captions(audio_files: list[str], script: dict, format_type: str = "short") -> str:
+    if format_type == "short":
+        play_res_x = 1080
+        play_res_y = 1920
+        font_size  = 88      # was 72 — larger for mobile screens
+        margin_v   = 420     # position in lower-middle area of short
+    else:
+        play_res_x = 1920
+        play_res_y = 1080
+        font_size  = 60      # was 54
+        margin_v   = 130
+
+    pos_x = play_res_x // 2
+    pos_y = play_res_y - margin_v
+    pos_tag = f"{{\\pos({pos_x},{pos_y})}}"
+
     ass_events = []
     time_offset = 0.0
     
@@ -137,7 +152,7 @@ def generate_captions(audio_files: list[str], script: dict, format_type: str = "
                         styled_parts.append(f"{{\\c&HFFFFFF&}}{curr_word.upper()}{{\\r}}")
                         
                 styled_text = " ".join(styled_parts)
-                ass_events.append(f"Dialogue: 0,{fmt_time(start)},{fmt_time(end)},Default,,0,0,0,,{styled_text}")
+                ass_events.append(f"Dialogue: 0,{fmt_time(start)},{fmt_time(end)},Default,,0,0,0,,{pos_tag}{styled_text}")
             
             time_offset += duration
             print(f"Segment {seg['id']} duration: {duration:.2f}s, Cumulative offset: {time_offset:.2f}s")
@@ -195,7 +210,7 @@ def generate_captions(audio_files: list[str], script: dict, format_type: str = "
                         styled_parts.append(f"{{\\c&HFFFFFF&}}{curr_word.upper()}{{\\r}}")
                         
                 styled_text = " ".join(styled_parts)
-                ass_events.append(f"Dialogue: 0,{fmt_time(start)},{fmt_time(end)},Default,,0,0,0,,{styled_text}")
+                ass_events.append(f"Dialogue: 0,{fmt_time(start)},{fmt_time(end)},Default,,0,0,0,,{pos_tag}{styled_text}")
                     
             time_offset += duration
             print(f"Segment {seg['id']} duration: {duration:.2f}s (rule-timed), Cumulative offset: {time_offset:.2f}s")
@@ -218,17 +233,6 @@ def generate_captions(audio_files: list[str], script: dict, format_type: str = "
         picked_font = "Bebas Neue"
         script["font_name"] = "Bebas Neue"
         print(f"[Font] Error downloading, falling back to Bebas Neue: {e}")
-
-    if format_type == "short":
-        play_res_x = 1080
-        play_res_y = 1920
-        font_size  = 88      # was 72 — larger for mobile screens
-        margin_v   = 420     # position in lower-middle area of short
-    else:
-        play_res_x = 1920
-        play_res_y = 1080
-        font_size  = 60      # was 54
-        margin_v   = 130
 
     ass_header = f"""[Script Info]
 ScriptType: v4.00+

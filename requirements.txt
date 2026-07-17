@@ -11,3 +11,4 @@ kokoro>=0.3.0
 dailymotion
 curl_cffi
 
+yt-dlp
