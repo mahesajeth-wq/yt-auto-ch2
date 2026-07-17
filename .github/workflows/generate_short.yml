@@ -13,7 +13,7 @@ concurrency:
 jobs:
   generate-and-publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 180
     env:
       PYTHONUNBUFFERED: "1"
       BROLL_SEGMENT_BUDGET_SECONDS: "180"
@@ -50,7 +50,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Generate Short
-        timeout-minutes: 70
+        timeout-minutes: 160
         env:
           GEMINI_API_KEY:    ${{ secrets.GEMINI_API_KEY }}
           PEXELS_API_KEY:    ${{ secrets.PEXELS_API_KEY }}
@@ -72,7 +72,7 @@ jobs:
             if [ "$attempt" -gt 1 ] && [ -d output ]; then
               resume_arg="--resume"
             fi
-            timeout 32m python run_generate.py --format short $resume_arg && exit 0
+            timeout 65m python run_generate.py --format short $resume_arg && exit 0
             code=$?
             if [ "$code" -eq 124 ]; then
               echo "Generate attempt ${attempt} timed out"
