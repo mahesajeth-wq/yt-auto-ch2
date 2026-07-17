@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Hyperframes B-roll Render Template</title>
+  <!-- Modern Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Courier+Prime&family=Inter:wght@300;400;700&family=Playfair+Display:ital,wght@0,600;1,400&family=Share+Tech+Mono&family=Space+Grotesk:wght@400;700&display=swap" rel="stylesheet">
+  
+  <!-- GSAP CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #000;
+      font-family: 'Inter', sans-serif;
+    }
+
+    #viewport {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    #broll-container {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    #broll-image {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transform-origin: center center;
+    }
+
+    /* --- Overlays --- */
+    .overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      opacity: 0;
+      display: none;
+    }
+
+    /* Science Niche HUD */
+    .niche-science #overlay-grid {
+      display: block;
+      opacity: 0.15;
+      background-size: 40px 40px;
+      background-image: 
+        linear-gradient(to right, #00f0ff 1px, transparent 1px),
+        linear-gradient(to bottom, #00f0ff 1px, transparent 1px);
+    }
+    .niche-science #overlay-hud {
+      display: block;
+      opacity: 0.8;
+      border: 2px solid rgba(0, 240, 255, 0.3);
+      margin: 15px;
+      width: calc(100% - 30px);
+      height: calc(100% - 30px);
+      box-shadow: inset 0 0 20px rgba(0, 240, 255, 0.1);
+    }
+    .niche-science #overlay-hud::before {
+      content: "SCANNING ACTIVE... STATUS: OK";
+      position: absolute;
+      top: 10px;
+      left: 15px;
+      color: #00f0ff;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 12px;
+      letter-spacing: 2px;
+    }
+    #scanner-line {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 4px;
+      background: linear-gradient(180deg, rgba(0,240,255,0) 0%, rgba(0,240,255,0.8) 50%, rgba(0,240,255,0) 100%);
+      box-shadow: 0 0 10px rgba(0,240,255,0.5);
+      display: none;
+    }
+    .niche-science #scanner-line {
+      display: block;
+    }
+
+    /* Nature Niche Atmospheric */
+    .niche-nature #overlay-vignette {
+      display: block;
+      opacity: 0.7;
+      background: radial-gradient(circle, transparent 40%, rgba(0,0,0,0.9) 100%);
+    }
+    .niche-nature #overlay-mist {
+      display: block;
+      opacity: 0.35;
+      background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 50%, rgba(255,255,255,0.15) 100%);
+    }
+
+    /* History Niche Vintage */
+    .niche-history #overlay-vignette {
+      display: block;
+      opacity: 0.6;
+      background: radial-gradient(circle, transparent 50%, rgba(40,20,0,0.85) 100%);
+    }
+    .niche-history #broll-image {
+      filter: sepia(0.65) contrast(1.1) brightness(0.95);
+    }
+    .niche-history #overlay-noise {
+      display: block;
+      opacity: 0.08;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+    }
+
+    /* Engineering Niche Blueprint */
+    .niche-engineering #overlay-grid {
+      display: block;
+      opacity: 0.25;
+      background-size: 50px 50px;
+      background-image: 
+        linear-gradient(to right, #ffffff 1px, transparent 1px),
+        linear-gradient(to bottom, #ffffff 1px, transparent 1px);
+    }
+    .niche-engineering #broll-image {
+      filter: saturate(0.2) brightness(0.8) contrast(1.2);
+    }
+    .niche-engineering #overlay-hud {
+      display: block;
+      opacity: 0.5;
+      border: 1px dashed rgba(255, 255, 255, 0.4);
+      margin: 20px;
+      width: calc(100% - 40px);
+      height: calc(100% - 40px);
+    }
+
+    /* Business Niche Executive */
+    .niche-business #overlay-hud {
+      display: block;
+      opacity: 0.9;
+    }
+    #ticker-ribbon {
+      position: absolute;
+      bottom: 20px;
+      left: 0;
+      width: 100%;
+      height: 35px;
+      background-color: rgba(10, 20, 15, 0.85);
+      border-top: 1px solid #d4af37;
+      border-bottom: 1px solid #d4af37;
+      display: flex;
+      align-items: center;
+      overflow: hidden;
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 14px;
+      color: #d4af37;
+      display: none;
+    }
+    .niche-business #ticker-ribbon {
+      display: flex;
+    }
+    .ticker-wrapper {
+      display: flex;
+      white-space: nowrap;
+      padding-left: 100%;
+    }
+    .ticker-item {
+      padding: 0 30px;
+      font-weight: bold;
+    }
+
+    /* --- Caption / Hook Text Box --- */
+    #caption-box {
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 85%;
+      padding: 18px 24px;
+      border-radius: 6px;
+      text-align: center;
+      z-index: 10;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      display: none; /* Only displayed if caption is provided */
+    }
+
+    /* Default / General styling (bottom) */
+    .caption-pos-bottom {
+      bottom: 80px;
+      background-color: rgba(0,0,0,0.75);
+      border: 1px solid rgba(255,255,255,0.1);
+      color: #fff;
+    }
+
+    /* Science Niche styling (top HUD look) */
+    .niche-science #caption-box {
+      top: 60px;
+      bottom: auto;
+      background-color: rgba(0, 15, 30, 0.8);
+      border: 1px solid #00f0ff;
+      font-family: 'Share Tech Mono', monospace;
+      color: #00f0ff;
+    }
+
+    /* History Niche styling (parchment card look) */
+    .niche-history #caption-box {
+      bottom: 100px;
+      background-color: #f2ebd9;
+      border: 2px solid #5c4033;
+      font-family: 'Courier Prime', monospace;
+      color: #2b1d0c;
+    }
+
+    /* Engineering Niche styling */
+    .niche-engineering #caption-box {
+      bottom: 70px;
+      background-color: rgba(10, 20, 40, 0.85);
+      border-left: 5px solid #fff;
+      font-family: 'Space Grotesk', sans-serif;
+      color: #fff;
+      text-align: left;
+    }
+
+    /* Business Niche styling */
+    .niche-business #caption-box {
+      bottom: 90px;
+      background-color: rgba(15,15,15,0.9);
+      border: 1px solid #d4af37;
+      color: #fff;
+      font-family: 'Space Grotesk', sans-serif;
+    }
+
+    #caption-text {
+      font-size: 20px;
+      font-weight: 500;
+      line-height: 1.4;
+    }
+    .niche-history #caption-text {
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="viewport"
+       data-fps="30"
+       data-duration="6"
+       data-composition-variables='{"imageUrl": "", "duration": 6, "niche": "general", "caption": ""}'>
+       
+    <div id="broll-container">
+      <img id="broll-image" src="" alt="B-roll image">
+      
+      <!-- Styled overlays -->
+      <div id="overlay-grid" class="overlay"></div>
+      <div id="overlay-vignette" class="overlay"></div>
+      <div id="overlay-noise" class="overlay"></div>
+      <div id="overlay-mist" class="overlay"></div>
+      <div id="overlay-hud" class="overlay"></div>
+      <div id="scanner-line"></div>
+      
+      <!-- Stock ticker for business -->
+      <div id="ticker-ribbon">
+        <div class="ticker-wrapper" id="ticker-wrapper">
+          <div class="ticker-item">NYSE +1.2%</div>
+          <div class="ticker-item">NASDAQ +0.8%</div>
+          <div class="ticker-item">GOLD +2.4%</div>
+          <div class="ticker-item">BRENT $84.20</div>
+          <div class="ticker-item">BTC +4.5%</div>
+        </div>
+      </div>
+      
+      <!-- Text Hook Container -->
+      <div id="caption-box" class="caption-pos-bottom">
+        <div id="caption-text"></div>
+      </div>
+    </div>
+    
+  </div>
+
+  <script>
+    // Grab Hyperframes variables
+    const hf = window.__hyperframes || {
+      getVariables: () => ({
+        imageUrl: "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=1920",
+        duration: 6,
+        niche: "science",
+        caption: "A mysterious technology scan active."
+      })
+    };
+
+    const vars = hf.getVariables();
+    const niche = vars.niche || "general";
+    const duration = parseFloat(vars.duration) || 6.0;
+
+    // Apply niche CSS class to body
+    document.body.className = "niche-" + niche;
+
+    // Load B-roll Image
+    const imgEl = document.getElementById("broll-image");
+    if (vars.imageUrl) {
+      imgEl.src = vars.imageUrl;
+    }
+
+    // Set up caption
+    const captionBox = document.getElementById("caption-box");
+    const captionText = document.getElementById("caption-text");
+    if (vars.caption) {
+      captionText.innerText = vars.caption;
+      captionBox.style.display = "block";
+    }
+
+    // --- Build GSAP Animation Timeline ---
+    const tl = gsap.timeline({ defaults: { ease: "sine.inOut" } });
+
+    // 1. Ken Burns Effect (Zoom & Pan)
+    let scaleStart = 1.0;
+    let scaleEnd = 1.15;
+    let xEnd = "2%";
+    let yEnd = "1%";
+
+    if (niche === "science") {
+      scaleStart = 1.0;
+      scaleEnd = 1.12;
+      xEnd = "0%";
+      yEnd = "0%";
+    } else if (niche === "nature") {
+      scaleStart = 1.05;
+      scaleEnd = 1.25;
+      xEnd = "-3%";
+      yEnd = "-2%";
+    } else if (niche === "history") {
+      scaleStart = 1.0;
+      scaleEnd = 1.2;
+      xEnd = "3%";
+      yEnd = "2%";
+    } else if (niche === "engineering") {
+      scaleStart = 1.0;
+      scaleEnd = 1.1;
+      xEnd = "-1%";
+      yEnd = "1%";
+    }
+
+    // Apply Ken Burns zoom/pan over the full duration
+    tl.fromTo(imgEl, 
+      { scale: scaleStart, x: "0%", y: "0%" },
+      { scale: scaleEnd, x: xEnd, y: yEnd, duration: duration, ease: "linear" },
+      0
+    );
+
+    // 2. Niche Specific Animations
+    if (niche === "science") {
+      const line = document.getElementById("scanner-line");
+      // Scanner line loop
+      tl.fromTo(line,
+        { top: "0%" },
+        { top: "100%", duration: duration / 2, ease: "sine.inOut", repeat: 1, yoyo: true },
+        0
+      );
+    } else if (niche === "business") {
+      const ticker = document.getElementById("ticker-wrapper");
+      // Slide ticker text across the screen
+      tl.to(ticker, {
+        x: "-100%",
+        duration: duration,
+        ease: "none"
+      }, 0);
+    }
+
+    // 3. Caption entry animation
+    if (vars.caption) {
+      tl.fromTo(captionBox,
+        { opacity: 0, y: 20 },
+        { opacity: 1, y: 0, duration: 0.8, ease: "power2.out" },
+        0.3
+      );
+    }
+  </script>
+</body>
+</html>

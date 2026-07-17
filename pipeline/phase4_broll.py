@@ -778,22 +778,71 @@ def _download_video_robust(url: str, out_path: str, segment_index: int) -> bool:
 
 # ── Ken Burns zoom — applied to ALL image-to-video conversions ───────────────
 
-def _image_to_ken_burns_video(img_path: str, out_path: str, w: int, h: int, duration: float = 6.0):
+def _shorten_narration(text: str, max_words: int = 10) -> str:
+    if not text:
+        return ""
+    words = text.split()
+    if len(words) <= max_words:
+        return text
+    return " ".join(words[:max_words]) + "..."
+
+
+def _image_to_ken_burns_video(img_path: str, out_path: str, w: int, h: int, duration: float = 6.0, niche: str = "general", caption: str = ""):
     """
     Converts a static image to a video with a slow cinematic zoom (Ken Burns effect).
-    Uses FFmpeg zoompan filter — zero dependencies, no quality loss.
-    Randomly picks zoom direction for variety across segments.
+    Tries HeyGen Hyperframes for high-quality niche-specific motion overlays.
+    Falls back to robust FFmpeg zoompan filter if Hyperframes fails.
     """
-    fps    = 30
-    frames = int(duration * fps)  # zoompan needs total frame count, not seconds
+    try:
+        import json
+        import subprocess
+        
+        niche_map = {
+            "science": "science",
+            "nature": "nature",
+            "mystery": "nature",
+            "engineering": "engineering",
+            "business": "business",
+            "general": "general"
+        }
+        mapped_niche = niche_map.get(niche, "general")
+        
+        abs_img = os.path.abspath(img_path)
+        abs_out = os.path.abspath(out_path)
+        template_dir = os.path.abspath("pipeline/hyperframes_templates")
+        
+        variables = {
+            "imageUrl": f"file://{abs_img}",
+            "duration": duration,
+            "niche": mapped_niche,
+            "caption": caption
+        }
+        
+        resolution = "portrait" if h > w else "landscape"
+        cmd = [
+            "npx", "hyperframes", "render", template_dir,
+            "--output", abs_out,
+            "--resolution", resolution,
+            "--quality", "high",
+            "--variables", json.dumps(variables)
+        ]
+        
+        print(f"[B-roll] Rendering Hyperframes with niche={mapped_niche}...")
+        res = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if res.returncode == 0 and os.path.exists(out_path) and os.path.getsize(out_path) > 10_000:
+            print(f"[B-roll] Hyperframes render successful: {out_path}")
+            return
+        else:
+            print("[B-roll] Hyperframes render failed or returned empty file. Falling back to FFmpeg.")
+    except Exception as e:
+        print(f"[B-roll] Hyperframes execution error: {e}. Falling back to FFmpeg.")
 
-    # Three zoom styles — randomly chosen per segment for variety
+    fps    = 30
+    frames = int(duration * fps)
+
     styles = [
-        # Slow zoom into center
         f"scale=8000:-1,zoompan=z='min(zoom+0.0015,1.5)':d={frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={w}x{h}:fps={fps}",
-        # Slow zoom starting top-left
         f"scale=8000:-1,zoompan=z='min(zoom+0.0015,1.5)':d={frames}:x=0:y=0:s={w}x{h}:fps={fps}",
-        # Slow zoom, panning slightly right
         f"scale=8000:-1,zoompan=z='min(zoom+0.001,1.3)':d={frames}:x='iw-iw/zoom':y='ih/2-(ih/zoom/2)':s={w}x{h}:fps={fps}",
     ]
     vf = random.choice(styles)
@@ -806,6 +855,7 @@ def _image_to_ken_burns_video(img_path: str, out_path: str, w: int, h: int, dura
         "-an", out_path,
     ]
     subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
 
 
 # ── Fallback: Pollinations.ai (AI-generated, multiple models) ────────────────
@@ -1486,7 +1536,7 @@ def fetch_broll(query: str, format_type: str, segment_index: int, duration: floa
             with open(img_path, "wb") as f:
                 f.write(r.content)
             print(f"[B-roll] Segment {segment_index}: image downloaded. Applying Ken Burns…")
-            _image_to_ken_burns_video(img_path, out_path, w, h, duration)
+            _image_to_ken_burns_video(img_path, out_path, w, h, duration, niche=channel, caption=_shorten_narration(narration) if narration else query)
             return out_path
         except Exception as e:
             print(f"[B-roll] Image source failed: {e}. Trying Pollinations…")
@@ -1494,11 +1544,11 @@ def fetch_broll(query: str, format_type: str, segment_index: int, duration: floa
     # ── Fallback 3: Pollinations AI image ─────────────────────────────────────────────────
     if _pollinations_image(query, w, h, img_path):
         print(f"[B-roll] Segment {segment_index}: Pollinations OK. Applying Ken Burns…")
-        _image_to_ken_burns_video(img_path, out_path, w, h, duration)
+        _image_to_ken_burns_video(img_path, out_path, w, h, duration, niche=channel, caption=_shorten_narration(narration) if narration else query)
         return out_path
 
     # ── Fallback 4: PIL gradient placeholder ──────────────────────────────────────────────
     print(f"[B-roll] Segment {segment_index}: all sources failed. Using gradient placeholder.")
     _pil_placeholder(query, w, h, img_path)
-    _image_to_ken_burns_video(img_path, out_path, w, h, duration)
+    _image_to_ken_burns_video(img_path, out_path, w, h, duration, niche=channel, caption=_shorten_narration(narration) if narration else query)
     return out_path
