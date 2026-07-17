@@ -931,7 +931,7 @@ def _image_to_ken_burns_video(img_path: str, out_path: str, w: int, h: int, dura
         resolution = "portrait" if h > w else "landscape"
         template_file = "index_portrait.html" if h > w else "index_landscape.html"
         cmd = [
-            "npx", "hyperframes", "render", template_dir,
+            "npx", "-y", "hyperframes", "render", template_dir,
             "-c", template_file,
             "--output", abs_out,
             "--resolution", resolution,
@@ -955,6 +955,21 @@ def _image_to_ken_burns_video(img_path: str, out_path: str, w: int, h: int, dura
                     pass
     except Exception as e:
         print(f"[B-roll] Hyperframes execution error: {e}. Falling back to FFmpeg.")
+
+    ext = os.path.splitext(img_path)[1].lower()
+    is_video = ext in [".mp4", ".webm", ".ogv", ".mov", ".avi"]
+    
+    if is_video:
+        print(f"[B-roll] Normalizing video fallback: {img_path} -> {out_path}")
+        cmd = [
+            "ffmpeg", "-y", "-i", img_path,
+            "-vf", f"scale=trunc({w}/2)*2:trunc({h}/2)*2:force_original_aspect_ratio=increase,crop={w}:{h},setsar=1",
+            "-t", str(duration), "-r", "30",
+            "-c:v", "libx264", "-preset", "fast", "-crf", "20", "-pix_fmt", "yuv420p",
+            "-an", out_path
+        ]
+        subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return
 
     fps    = 30
     frames = int(duration * fps)
