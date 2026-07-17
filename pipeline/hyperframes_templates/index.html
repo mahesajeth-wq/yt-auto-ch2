@@ -261,6 +261,7 @@
 <body>
 
   <div id="viewport"
+       data-composition-id="viewport"
        data-fps="30"
        data-duration="6"
        data-composition-variables='{"imageUrl": "", "duration": 6, "niche": "general", "caption": ""}'>
@@ -296,6 +297,9 @@
   </div>
 
   <script>
+    // Signal readiness gate for Hyperframes
+    window.__playerReady = false;
+
     // Grab Hyperframes variables
     const hf = window.__hyperframes || {
       getVariables: () => ({
@@ -313,10 +317,20 @@
     // Apply niche CSS class to body
     document.body.className = "niche-" + niche;
 
-    // Load B-roll Image
+    // Load B-roll Image and hook to __playerReady
     const imgEl = document.getElementById("broll-image");
+    
+    imgEl.onload = () => {
+      window.__playerReady = true;
+    };
+    imgEl.onerror = () => {
+      window.__playerReady = true; // prevent freeze
+    };
+
     if (vars.imageUrl) {
       imgEl.src = vars.imageUrl;
+    } else {
+      window.__playerReady = true;
     }
 
     // Set up caption
@@ -327,8 +341,12 @@
       captionBox.style.display = "block";
     }
 
-    // --- Build GSAP Animation Timeline ---
-    const tl = gsap.timeline({ defaults: { ease: "sine.inOut" } });
+    // --- Build GSAP Animation Timeline (paused for seek-based rendering) ---
+    const tl = gsap.timeline({ paused: true, defaults: { ease: "sine.inOut" } });
+
+    // Register timeline with Hyperframes
+    window.__timelines = window.__timelines || {};
+    window.__timelines["viewport"] = tl;
 
     // 1. Ken Burns Effect (Zoom & Pan)
     let scaleStart = 1.0;
