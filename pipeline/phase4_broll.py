@@ -1498,7 +1498,7 @@ def fetch_broll(query: str, format_type: str, segment_index: int, duration: floa
                     if used_urls is not None:
                         used_urls.add(chosen["video_url"])
                     print(f"[B-roll] Video downloaded. Running Hyperframes overlays...")
-                    _image_to_ken_burns_video(temp_video_path, out_path, w, h, duration, niche=channel, caption=_shorten_narration(narration) if narration else query)
+                    _image_to_ken_burns_video(temp_video_path, out_path, w, h, duration, niche=channel, caption="")
                     if os.path.exists(temp_video_path):
                         try:
                             os.remove(temp_video_path)
@@ -1635,7 +1635,7 @@ def fetch_broll(query: str, format_type: str, segment_index: int, duration: floa
             
             # Run the video through Hyperframes overlays
             print(f"[B-roll] Parallel winner video. Running Hyperframes overlays...")
-            _image_to_ken_burns_video(winner["temp_v"], out_path, w, h, duration, niche=channel, caption=_shorten_narration(narration) if narration else query)
+            _image_to_ken_burns_video(winner["temp_v"], out_path, w, h, duration, niche=channel, caption="")
             
             if used_urls is not None:
                 used_urls.add(winner["video_url"])
@@ -1693,7 +1693,7 @@ def fetch_broll(query: str, format_type: str, segment_index: int, duration: floa
             with open(img_path, "wb") as f:
                 f.write(r.content)
             print(f"[B-roll] Segment {segment_index}: image downloaded. Applying Ken Burns…")
-            _image_to_ken_burns_video(img_path, out_path, w, h, duration, niche=channel, caption=_shorten_narration(narration) if narration else query)
+            _image_to_ken_burns_video(img_path, out_path, w, h, duration, niche=channel, caption="")
             return out_path
         except Exception as e:
             print(f"[B-roll] Image source failed: {e}. Trying Pollinations…")
@@ -1701,11 +1701,11 @@ def fetch_broll(query: str, format_type: str, segment_index: int, duration: floa
     # ── Fallback 3: Pollinations AI image ─────────────────────────────────────────────────
     if _pollinations_image(query, w, h, img_path):
         print(f"[B-roll] Segment {segment_index}: Pollinations OK. Applying Ken Burns…")
-        _image_to_ken_burns_video(img_path, out_path, w, h, duration, niche=channel, caption=_shorten_narration(narration) if narration else query)
+        _image_to_ken_burns_video(img_path, out_path, w, h, duration, niche=channel, caption="")
         return out_path
 
     # ── Fallback 4: PIL gradient placeholder ──────────────────────────────────────────────
     print(f"[B-roll] Segment {segment_index}: all sources failed. Using gradient placeholder.")
     _pil_placeholder(query, w, h, img_path)
-    _image_to_ken_burns_video(img_path, out_path, w, h, duration, niche=channel, caption=_shorten_narration(narration) if narration else query)
+    _image_to_ken_burns_video(img_path, out_path, w, h, duration, niche=channel, caption="")
     return out_path

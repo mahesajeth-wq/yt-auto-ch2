@@ -152,7 +152,7 @@
     }
 
     /* --- History Niche: Scrapbook circle --- */
-    .niche-history #broll-image {
+    .niche-history #broll-container {
       filter: sepia(0.6) contrast(1.1) brightness(0.9);
     }
     #history-vignette {
@@ -328,6 +328,7 @@
        
     <div id="broll-container">
       <img id="broll-image" src="" alt="B-roll image">
+      <video id="broll-video" muted playsinline style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; display: none;"></video>
       
       <!-- Niche Overlays -->
       <!-- Science -->
@@ -420,20 +421,40 @@
     // Apply niche CSS class to body
     document.body.className = "niche-" + niche;
 
-    // Load B-roll Image and hook to __playerReady
+    // Load B-roll Media and hook to __playerReady
     const imgEl = document.getElementById("broll-image");
+    const videoEl = document.getElementById("broll-video");
     
-    imgEl.onload = () => {
-      window.__playerReady = true;
-    };
-    imgEl.onerror = () => {
-      window.__playerReady = true; // prevent freeze
-    };
+    // Check if the URL refers to a video file
+    const cleanUrl = vars.imageUrl ? vars.imageUrl.split('?')[0].split('#')[0] : "";
+    const isVideo = cleanUrl.endsWith(".mp4") || cleanUrl.endsWith(".webm") || cleanUrl.endsWith(".ogv");
 
-    if (vars.imageUrl) {
-      imgEl.src = vars.imageUrl;
+    if (isVideo) {
+      imgEl.style.display = "none";
+      videoEl.style.display = "block";
+      
+      videoEl.onloadeddata = () => {
+        window.__playerReady = true;
+      };
+      videoEl.onerror = () => {
+        window.__playerReady = true; // prevent freeze
+      };
+      videoEl.src = vars.imageUrl;
     } else {
-      window.__playerReady = true;
+      videoEl.style.display = "none";
+      imgEl.style.display = "block";
+      
+      imgEl.onload = () => {
+        window.__playerReady = true;
+      };
+      imgEl.onerror = () => {
+        window.__playerReady = true; // prevent freeze
+      };
+      if (vars.imageUrl) {
+        imgEl.src = vars.imageUrl;
+      } else {
+        window.__playerReady = true;
+      }
     }
 
     // Set up caption
@@ -451,40 +472,49 @@
     window.__timelines = window.__timelines || {};
     window.__timelines["viewport"] = tl;
 
-    // 1. Ken Burns Effect (Zoom & Pan)
-    let scaleStart = 1.0;
-    let scaleEnd = 1.15;
-    let xEnd = "2%";
-    let yEnd = "1%";
+    // 1. Media Layer Animation
+    if (isVideo) {
+      // Bind video playback to the timeline seeking
+      tl.to(videoEl, {
+        currentTime: duration,
+        duration: duration,
+        ease: "linear"
+      }, 0);
+    } else {
+      // Ken Burns Effect (Zoom & Pan)
+      let scaleStart = 1.0;
+      let scaleEnd = 1.15;
+      let xEnd = "2%";
+      let yEnd = "1%";
 
-    if (niche === "science") {
-      scaleStart = 1.0;
-      scaleEnd = 1.12;
-      xEnd = "0%";
-      yEnd = "0%";
-    } else if (niche === "nature") {
-      scaleStart = 1.05;
-      scaleEnd = 1.25;
-      xEnd = "-3%";
-      yEnd = "-2%";
-    } else if (niche === "history") {
-      scaleStart = 1.0;
-      scaleEnd = 1.2;
-      xEnd = "3%";
-      yEnd = "2%";
-    } else if (niche === "engineering") {
-      scaleStart = 1.0;
-      scaleEnd = 1.1;
-      xEnd = "-1%";
-      yEnd = "1%";
+      if (niche === "science") {
+        scaleStart = 1.0;
+        scaleEnd = 1.12;
+        xEnd = "0%";
+        yEnd = "0%";
+      } else if (niche === "nature") {
+        scaleStart = 1.05;
+        scaleEnd = 1.25;
+        xEnd = "-3%";
+        yEnd = "-2%";
+      } else if (niche === "history") {
+        scaleStart = 1.0;
+        scaleEnd = 1.2;
+        xEnd = "3%";
+        yEnd = "2%";
+      } else if (niche === "engineering") {
+        scaleStart = 1.0;
+        scaleEnd = 1.1;
+        xEnd = "-1%";
+        yEnd = "1%";
+      }
+
+      tl.fromTo(imgEl, 
+        { scale: scaleStart, x: "0%", y: "0%" },
+        { scale: scaleEnd, x: xEnd, y: yEnd, duration: duration, ease: "linear" },
+        0
+      );
     }
-
-    // Apply Ken Burns zoom/pan over the full duration
-    tl.fromTo(imgEl, 
-      { scale: scaleStart, x: "0%", y: "0%" },
-      { scale: scaleEnd, x: xEnd, y: yEnd, duration: duration, ease: "linear" },
-      0
-    );
 
     // 2. Niche Specific Animations
     if (niche === "science") {
