@@ -896,6 +896,8 @@ def _image_to_ken_burns_video(img_path: str, out_path: str, w: int, h: int, dura
     Falls back to robust FFmpeg zoompan filter if Hyperframes fails.
     """
     try:
+        if os.environ.get("DISABLE_HYPERFRAMES", "0") == "1":
+            raise RuntimeError("Hyperframes disabled via DISABLE_HYPERFRAMES")
         import json
         import subprocess
         import uuid
@@ -954,7 +956,10 @@ def _image_to_ken_burns_video(img_path: str, out_path: str, w: int, h: int, dura
                 except Exception:
                     pass
     except Exception as e:
-        print(f"[B-roll] Hyperframes execution error: {e}. Falling back to FFmpeg.")
+        if "Hyperframes disabled" in str(e):
+            print("[B-roll] Hyperframes disabled via DISABLE_HYPERFRAMES. Using FFmpeg directly.")
+        else:
+            print(f"[B-roll] Hyperframes execution error: {e}. Falling back to FFmpeg.")
 
     ext = os.path.splitext(img_path)[1].lower()
     is_video = ext in [".mp4", ".webm", ".ogv", ".mov", ".avi"]
