@@ -90,15 +90,67 @@ Each object must have exactly these fields:
             }
         ]
 
-    # ── 4. Pick first topic matching format_type ──────────────────────────────
+    # ── 4. Pick first topic matching format_type and not a duplicate ─────────
+    import re
+    def get_keywords(text: str) -> set:
+        text = text.lower()
+        words = re.findall(r"\b[a-z0-9-]{3,}\b", text)
+        stopwords = {
+            "the", "and", "for", "with", "from", "that", "this", "these", "those",
+            "how", "why", "what", "who", "whom", "which", "where", "when", "actually",
+            "about", "would", "could", "should", "your", "them", "they", "their",
+            "reveals", "bizarre", "counterinteractive", "counterintuitive", "little-known", "fact", "science",
+            "people", "scientists", "discovered", "discovery", "reveal", "unlocks",
+            "unlocked", "unlocking", "understanding", "mechanism", "theory", "phenomenon"
+        }
+        return {w for w in words if w not in stopwords}
+
+    def is_duplicate(new_topic: str) -> bool:
+        new_keys = get_keywords(new_topic)
+        if not new_keys:
+            return False
+        for old_topic in published:
+            old_keys = get_keywords(old_topic)
+            overlap = new_keys.intersection(old_keys)
+            if len(overlap) >= 3 or (len(new_keys) > 0 and len(overlap) / len(new_keys) >= 0.5):
+                print(f"[Similarity Check] Rejecting topic '{new_topic}' due to overlap {overlap} with: '{old_topic}'")
+                return True
+        return False
+
     selected_topic = None
     for item in topics_list:
         if item.get("for_format", "both") in (format_type, "both"):
-            selected_topic = item
-            break
+            if not is_duplicate(item.get("topic", "")):
+                selected_topic = item
+                break
+
+    # Retry loop if all candidate topics were duplicates
+    attempts = 0
+    while not selected_topic and attempts < 3:
+        attempts += 1
+        print(f"[Phase1] All generated topics were duplicates. Retrying topic generation (Attempt {attempts}/3)...")
+        response_text = client.generate_text(prompt, use_grounding=is_trending, temperature=0.75 + (attempts * 0.05))
+        try:
+            topics_list = _robust_json_loads(response_text)
+            if isinstance(topics_list, list) and topics_list:
+                for item in topics_list:
+                    if item.get("for_format", "both") in (format_type, "both"):
+                        if not is_duplicate(item.get("topic", "")):
+                            selected_topic = item
+                            break
+        except Exception as e:
+            print(f"Error parsing retried topics: {e}")
+
+    # Fallback to first generated if no non-duplicate found
     if not selected_topic:
-        selected_topic = topics_list[0]
-        selected_topic["for_format"] = format_type
+        print("[Phase1] Warning: Could not generate a completely non-duplicate topic. Using first available as fallback.")
+        for item in topics_list:
+            if item.get("for_format", "both") in (format_type, "both"):
+                selected_topic = item
+                break
+        if not selected_topic:
+            selected_topic = topics_list[0]
+            selected_topic["for_format"] = format_type
 
     print(f"[Phase1] Selected: {selected_topic['topic']}")
 
