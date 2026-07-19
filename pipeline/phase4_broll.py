@@ -749,32 +749,32 @@ def _parse_iso_duration(duration_str: str) -> float:
 
 def _youtube_candidates(query: str, n: int = 5) -> list[dict]:
     """
-    Search YouTube for royalty-free / copyright-free videos matching the query.
-    Prioritizes Creative Commons licensed videos.
-    Checks titles and descriptions to ensure they are free to use.
+    Search YouTube for Creative Commons videos matching the query.
+    Uses YouTube's official Creative Commons filter (sp=EgQQASgB).
     """
     import yt_dlp
+    import urllib.parse
     import re
     
     candidates = []
     try:
-        print(f"[B-roll] Searching YouTube with yt-dlp matching: '{query}'...")
+        print(f"[B-roll] Searching YouTube (Creative Commons) for: '{query}'...")
+        encoded_query = urllib.parse.quote(query)
+        search_url = f"https://www.youtube.com/results?search_query={encoded_query}&sp=EgQQASgB"
+        
         ydl_opts = {
             'quiet': True,
             'extract_flat': True,
             'force_generic_extractor': False,
         }
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            # We search for "query royalty free" or "query creative commons"
-            search_query = f"ytsearch{n}:{query} royalty free"
-            result = ydl.extract_info(search_query, download=False)
-            
+            result = ydl.extract_info(search_url, download=False)
             entries = result.get('entries', []) if result else []
-            for entry in entries:
+            
+            for entry in entries[:n]:
                 if not entry:
                     continue
                 title = entry.get('title', '')
-                desc = entry.get('description', '')
                 url = entry.get('url', '')
                 duration = entry.get('duration')
                 
@@ -782,45 +782,36 @@ def _youtube_candidates(query: str, n: int = 5) -> list[dict]:
                     continue
                     
                 duration_secs = float(duration) if duration else 0.0
-                # Skip extremely short or extremely long videos
-                if duration_secs < 5 or duration_secs > 600:
+                if duration_secs > 0.0 and duration_secs < 5.0:
                     continue
                 
-                title_lower = title.lower()
-                desc_lower = (desc or '').lower()
+                # Get highest resolution thumbnail
+                thumbnails = entry.get("thumbnails", [])
+                thumb_url = ""
+                if thumbnails:
+                    thumb_url = thumbnails[-1].get("url", "")
                 
-                # Check for royalty-free keywords
-                has_free_keywords = any(kw in (title_lower + " " + desc_lower) for kw in [
-                    "royalty free", "copyright free", "no copyright", "free to use",
-                    "creative commons", "cc0", "public domain", "free stock footage", "stock video free"
-                ])
-                
-                # Skip if there are clear copyright restrictions
-                has_copyright_restriction = any(kw in desc_lower for kw in [
-                    "all rights reserved", "do not copy", "copyright protected", "unauthorized reuse prohibited"
-                ])
-                
-                if has_free_keywords and not has_copyright_restriction:
-                    # Get highest resolution thumbnail
-                    thumbnails = entry.get("thumbnails", [])
-                    thumb_url = ""
-                    if thumbnails:
-                        # Find thumbnail with highest height/width or just take the last one
-                        thumb_url = thumbnails[-1].get("url", "")
-                        
-                    candidates.append({
-                        "source": "YouTube",
-                        "video_url": url,
-                        "thumb_url": thumb_url,
-                        "title": title,
-                        "description": desc or "",
-                        "duration": duration_secs
-                    })
+                # Generate fallback thumbnail if not provided
+                video_id = None
+                m_id = re.search(r'(?:v=|\/)([^&\n?#]+)', url)
+                if m_id:
+                    video_id = m_id.group(1)
+                if video_id and not thumb_url:
+                    thumb_url = f"https://img.youtube.com/vi/{video_id}/0.jpg"
                     
-        print(f"[B-roll] Found {len(candidates)} valid YouTube candidates using yt-dlp.")
+                candidates.append({
+                    "source": "YouTube",
+                    "video_url": url,
+                    "thumb_url": thumb_url,
+                    "title": title,
+                    "description": entry.get('description', '') or "",
+                    "duration": duration_secs
+                })
+                
+        print(f"[B-roll] Found {len(candidates)} YouTube Creative Commons candidates.")
         return candidates
     except Exception as e:
-        print(f"[B-roll] YouTube search via yt-dlp failed: {e}")
+        print(f"[B-roll] YouTube CC search failed: {e}")
         return []
 
 
@@ -828,16 +819,38 @@ def _download_video_robust(url: str, out_path: str, segment_index: int) -> bool:
     try:
         # Check if downloading from YouTube
         if "youtube.com" in url or "youtu.be" in url:
-            print(f"[B-roll] Downloading YouTube video using yt-dlp: {url}...")
-            import yt_dlp
-            ydl_opts = {
-                'format': 'bestvideo[height<=1080][ext=mp4]/best[height<=1080][ext=mp4]/best',
-                'outtmpl': out_path,
-                'quiet': True,
-                'no_warnings': True,
-            }
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                ydl.download([url])
+            print(f"[B-roll] Downloading YouTube video slice using yt-dlp CLI: {url}...")
+            
+            # 1. Fetch metadata json to read duration
+            duration_secs = 0.0
+            try:
+                cmd_info = ["yt-dlp", "--dump-json", "--extract-flat", url]
+                res_info = subprocess.run(cmd_info, capture_output=True, text=True, check=True)
+                info = json.loads(res_info.stdout)
+                duration_secs = float(info.get("duration", 0.0))
+            except Exception as e:
+                print(f"[B-roll] Warning: Could not retrieve video duration: {e}")
+            
+            # 2. Pick a safe start time to skip intro card/logos
+            start_time = 20.0
+            if duration_secs > 0.0 and duration_secs <= 25.0:
+                start_time = 2.0
+            if duration_secs > 0.0 and duration_secs <= 5.0:
+                start_time = 0.0
+                
+            end_time = start_time + 10.0 # download 10 seconds slice
+            section_arg = f"*{start_time}-{end_time}"
+            
+            # 3. Call yt-dlp CLI to download only the section
+            cmd_dl = [
+                "yt-dlp",
+                "--download-sections", section_arg,
+                "--format", "bestvideo[height<=720][ext=mp4]/best",
+                "--output", out_path,
+                url
+            ]
+            print(f"[B-roll] Running yt-dlp section download: {' '.join(cmd_dl)}")
+            subprocess.run(cmd_dl, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             return os.path.exists(out_path) and os.path.getsize(out_path) > 10_000
 
         r = requests.get(url, stream=True, timeout=90, headers={"User-Agent": "yt-auto/1.0"})
