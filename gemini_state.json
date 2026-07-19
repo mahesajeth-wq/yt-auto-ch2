@@ -15,22 +15,22 @@
     "status": "daily_exhausted"
   },
   "3": {
-    "cooldown_until": 0.0,
-    "failures": 0,
-    "status": "active"
+    "cooldown_until": 1784448000.0,
+    "failures": 4,
+    "status": "daily_exhausted"
   },
   "4": {
-    "cooldown_until": 0.0,
-    "failures": 4,
-    "status": "daily_exhausted"
+    "cooldown_until": 1784446301.2890773,
+    "failures": 1,
+    "status": "active"
   },
   "5": {
-    "cooldown_until": 0.0,
-    "failures": 4,
-    "status": "daily_exhausted"
+    "cooldown_until": 1784446309.8663037,
+    "failures": 1,
+    "status": "active"
   },
   "6": {
-    "cooldown_until": 0.0,
+    "cooldown_until": 1784446317.9958656,
     "failures": 0,
     "status": "active"
   },
@@ -40,38 +40,38 @@
     "status": "disabled"
   },
   "8": {
-    "cooldown_until": 0.0,
-    "failures": 4,
-    "status": "daily_exhausted"
+    "cooldown_until": 1784446326.2103503,
+    "failures": 1,
+    "status": "active"
   },
   "9": {
-    "cooldown_until": 0.0,
-    "failures": 4,
-    "status": "daily_exhausted"
+    "cooldown_until": 1784446334.5792139,
+    "failures": 1,
+    "status": "active"
   },
   "10": {
-    "cooldown_until": 0.0,
-    "failures": 4,
-    "status": "daily_exhausted"
+    "cooldown_until": 1784446342.9148147,
+    "failures": 1,
+    "status": "active"
   },
   "11": {
-    "cooldown_until": 0.0,
-    "failures": 4,
-    "status": "daily_exhausted"
+    "cooldown_until": 1784446351.5630002,
+    "failures": 1,
+    "status": "active"
   },
   "12": {
-    "cooldown_until": 0.0,
-    "failures": 4,
-    "status": "daily_exhausted"
+    "cooldown_until": 1784446058.736782,
+    "failures": 1,
+    "status": "active"
   },
   "13": {
-    "cooldown_until": 0.0,
-    "failures": 4,
-    "status": "daily_exhausted"
+    "cooldown_until": 1784446067.2219672,
+    "failures": 1,
+    "status": "active"
   },
   "14": {
-    "cooldown_until": 0.0,
-    "failures": 4,
-    "status": "daily_exhausted"
+    "cooldown_until": 1784446225.5288656,
+    "failures": 1,
+    "status": "active"
   }
 }
