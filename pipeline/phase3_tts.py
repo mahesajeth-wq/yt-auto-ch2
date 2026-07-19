@@ -213,7 +213,6 @@ def generate_audio(script: dict) -> list[str]:
             with open(combined_raw_path, "wb") as wf:
                 wf.write(audio_bytes)
         else:
-            import wave
             with wave.open(combined_raw_path, "wb") as wf:
                 wf.setnchannels(1)
                 wf.setsampwidth(2)
