@@ -19,12 +19,31 @@ GRAPH_VIDEO_API = "https://graph-video.facebook.com/v22.0"
 
 # ── Facebook Page Reel Upload ────────────────────────────────────────────────
 
+def _get_page_access_token(page_id: str, token: str) -> str:
+    """Fetch specific Page Access Token using user token if required."""
+    try:
+        r = requests.get(
+            f"{GRAPH_API}/{page_id}",
+            params={"fields": "access_token", "access_token": token},
+            timeout=15,
+        )
+        if r.status_code == 200:
+            p_token = r.json().get("access_token")
+            if p_token:
+                print(f"[Meta/FB] Successfully retrieved Page Access Token for Page {page_id}")
+                return p_token
+    except Exception as e:
+        print(f"[Meta/FB] Note: Page access token query returned: {e}")
+    return token
+
+
 def _fb_upload_reel(video_path: str, description: str, page_id: str, page_token: str, title: str = "") -> str | None:
     """Upload a video as a Reel to a Facebook Page using resumable upload.
 
     Returns the video_id on success, None on failure.
     """
     file_size = os.path.getsize(video_path)
+    page_token = _get_page_access_token(page_id, page_token)
 
     # Step 1: Initialize upload session
     print("[Meta/FB] Starting Reel upload session...")
